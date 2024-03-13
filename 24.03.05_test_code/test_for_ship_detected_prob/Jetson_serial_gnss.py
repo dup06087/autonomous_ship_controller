@@ -62,21 +62,16 @@ class serial_gnss:
                         line = self.serial_port.readline()
                         if line:
                             lines.append(line)
-                            
                     
                     except serial.SerialException:
                         for key in self.current_value.keys():
                             self.current_value[key] = None
+                        self.flag_gnss = False
+
                         self.close()
                         
 
                     except Exception as e:
-                        count_alive += 1
-                        if count_alive >= 5:
-                            self.flag_gnss = False
-                        else:
-                            self.flag_gnss = True
-                            
                         print("readline error : ", e) 
                         print("gnss variable line : ", line)  ## must be one value
 
@@ -93,7 +88,6 @@ class serial_gnss:
 
                     if line_:
                         self.add_to_queue(line_)
-                        count_alive = 0
                                                 
                 except Exception as e:
                     print("gnss in lines check : ", lines, line_)
@@ -104,6 +98,7 @@ class serial_gnss:
                 # self.close()
                 
     def _data_processing_part(self):
+        count_alive = 0
         while self.running:
             try:
                 time.sleep(0.2)     #'''time control'''
@@ -111,6 +106,14 @@ class serial_gnss:
                 # print("1. gnss data : ", data)
                 if data:
                     self.process_to_single_data(data)
+                    count_alive = 0
+                    print("gnss serial count ", count_alive)
+                else:
+                    count_alive += 1
+                    if count_alive >= 5:
+                        self.flag_gnss = False
+                    else:
+                        self.flag_gnss = True
 
             except Exception as e:
                 print(f"Error processing data: {e}")
