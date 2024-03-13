@@ -1,0 +1,20 @@
+def initialize_variables(self):
+    self.end = 0
+    self.flag_exit = False
+    self.distance_to_target = 0
+
+    self.isready = False
+    self.isdriving = False
+    self.isfirst = True
+    # enddriving="0"
+    self.driveindex = 0
+
+    self.flag_avoidance = False
+    self.message = None
+
+    self.serial_gnss = None
+    self.serial_nucleo = None
+
+    self.serial_nucleo_cpy = None
+    
+    self.prev_pc_command = {'dest_latitude': None, 'dest_longitude': None, 'mode_pc_command': "SELF"}

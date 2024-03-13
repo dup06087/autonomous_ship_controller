@@ -1,0 +1,37 @@
+#!/usr/bin/env python3
+
+import rospy
+import rospkg
+from sensor_msgs.msg import PointCloud2, PointField
+import sensor_msgs.point_cloud2 as pc2
+import math
+import open3d as o3d
+import numpy as np
+import time
+import numpy
+import ros_numpy
+
+def voxelization(pc2_data):
+    voxel_size = 0.5
+    downsampled = pc2_data.voxel_down_sample(voxel_size)
+    return downsampled
+
+def callback(pointcloud2_msg):
+    pcd = pc2_to_o3d(pointcloud2_msg)
+    downsampled = voxelization(pcd)
+    o3d.visualization.draw_geometries([downsampled])
+
+
+def pc2_to_o3d(pc2_data):
+    pc_arr = ros_numpy.point_cloud2.pointcloud2_to_xyz_array(pc2_data)
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pc_arr)
+    return pcd
+
+def listener():
+    rospy.init_node("pointcloud_listener", anonymous=True)
+    rospy.Subscriber("/velodyne_points", PointCloud2, callback)
+    rospy.spin()
+
+if __name__ =="__main__":
+    listener()
