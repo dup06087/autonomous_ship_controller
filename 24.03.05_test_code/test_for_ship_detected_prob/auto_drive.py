@@ -59,21 +59,21 @@ def auto_drive(self):
                 
                 
                 """ comment out here to exclude vff """
-                # try:
-                #     calculate_vff_force(self, self.lidar_processor.bbox_lists)
-                #     # print("vff force calculate done")
-                # except Exception as e:
-                #     print("calculate vff force error : ", e)
-                # try:
-                #     self.current_value["waypoint_latitude"], self.current_value["waypoint_longitude"] = convert_vff_to_gps_with_heading(self.vff_force, current_latitude, current_longitude, current_heading)
-                #     self.flag_avoidance = True
-                # except Exception as e:
-                #     self.flag_avoidance = False
-                #     print("no obstacle : ", e)
+                try:
+                    calculate_vff_force(self, self.lidar_processor.bbox_lists)
+                    # print("vff force calculate done")
+                except Exception as e:
+                    print("calculate vff force error : ", e)
+                try:
+                    self.current_value["waypoint_latitude"], self.current_value["waypoint_longitude"] = convert_vff_to_gps_with_heading(self.vff_force, current_latitude, current_longitude, current_heading)
+                    self.flag_avoidance = True
+                except Exception as e:
+                    self.flag_avoidance = False
+                    print("no obstacle : ", e)
                 ''' end '''
                 
                 # add flag avoidance
-                self.flag_avoidance = False
+                # self.flag_avoidance = False
                     
                 if self.flag_avoidance:
                     destination_latitude = float(self.current_value["waypoint_latitude"])
@@ -149,17 +149,18 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         elif angle_diff < -180:
             angle_diff += 360
 
-        throttle_component = self.distance_to_target * math.cos(math.radians(angle_diff))
-        roll_component = self.distance_to_target * math.sin(math.radians(angle_diff))
+        self.throttle_component = self.distance_to_target * math.cos(math.radians(angle_diff))
+        self.roll_component = self.distance_to_target * math.sin(math.radians(angle_diff))
 
+        print("throttle, roll : ",self.throttle_component, self.roll_component)
         # Kf = 2.5
         # # Kd = 0.25 * 800 / (2 * math.pi * 100)
         # Kd = 0.318
 
-        Uf = Kf * throttle_component
+        Uf = Kf * self.throttle_component
         Uf = max(1550 - 1500, min(Uf, 1750 - 1500))
 
-        Ud = Kd * roll_component
+        Ud = Kd * self.roll_component
         max_diff = 800 * 0.125
         Ud = max(-max_diff, min(Ud, max_diff))
 
@@ -246,6 +247,12 @@ def calculate_vff_force(self, obstacles):
     total_force = total_repulsive_force + attraction_force * attraction_direction
     self.vff_force = total_force.tolist()  ### final output >> subscribe and show in rviz
     
+    print("vff force : ", self.vff_force)
+    
+    
+    
+    self.lidar_processor.publish_destination_marker(self.throttle_component, -self.roll_component, 0.0)
+
     # repulsive force test
     # self.vff_force = total_repulsive_force.tolist()
     # print("repulsive force : ", self.vff_force)

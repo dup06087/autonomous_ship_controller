@@ -41,7 +41,7 @@ class boat:
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/4", self.gnss_lock, 1)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/7", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("started well")

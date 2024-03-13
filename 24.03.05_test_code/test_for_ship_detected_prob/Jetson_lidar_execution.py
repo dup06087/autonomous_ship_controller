@@ -13,6 +13,7 @@ import time
 from motrackers.tracker import Tracker
 import math
 import threading
+from std_msgs.msg import ColorRGBA
 
 class LidarProcessor:
     def __init__(self):
@@ -30,6 +31,8 @@ class LidarProcessor:
         rospy.Subscriber("/velodyne_points", PointCloud2, self.callback, queue_size=None, tcp_nodelay=True)
         self.pub = rospy.Publisher('/o3d_pointcloud', PointCloud2, queue_size=None, tcp_nodelay=True)
         self.marker_tracker_pub = rospy.Publisher('tracker_bounding_boxes', MarkerArray, queue_size=None, tcp_nodelay=True)
+        self.marker_destination_pub = rospy.Publisher('destination_marker', Marker, queue_size=10)
+
         
         self.monitor_thread = threading.Thread(target=self.monitor_lidar_data)
         self.monitor_thread.daemon = True
@@ -41,6 +44,9 @@ class LidarProcessor:
         self.flag_lidar = True
         rospy.spin()
         self.flag_lidar = False
+        
+
+
         
     def init_coeff(self):
         self.coeff_kf = 1
@@ -157,16 +163,30 @@ class LidarProcessor:
         pitch_rad = np.radians(self.pitch)
         
         # Create the rotation matrix for pitch
-        R = np.array([[1, 0, 0],
-                      [0, np.cos(pitch_rad), -np.sin(pitch_rad)],
-                      [0, np.sin(pitch_rad), np.cos(pitch_rad)]])
+        # R = np.array([[1, 0, 0],
+        #               [0, np.cos(pitch_rad), -np.sin(pitch_rad)],
+        #               [0, np.sin(pitch_rad), np.cos(pitch_rad)]])
+        
+        
+        R = np.array([[np.cos(pitch_rad), 0, np.sin(pitch_rad)],
+                      [0, 1, 0],
+                      [-np.sin(pitch_rad), 0, np.cos(pitch_rad)]])
         
         # Apply the rotation to each point in the point cloud
         pcd.rotate(R, center=(0, 0, 0))
         
         return pcd
 
+    def delete_all_markers(self):
+        marker_array = MarkerArray()
+        delete_marker = Marker()
+        delete_marker.action = Marker.DELETEALL
+        marker_array.markers.append(delete_marker)
+        self.marker_tracker_pub.publish(marker_array)
+        
     def marking_tracks(self, tracks):
+        self.delete_all_markers()
+        
         marker_array = MarkerArray()
         for i, track in enumerate(tracks):
             marker = Marker()
@@ -174,6 +194,7 @@ class LidarProcessor:
             marker.id = i
             marker.type = Marker.CUBE
             marker.action = Marker.ADD
+            marker.lifetime = rospy.Duration(0)  # 마커가 지속되는 시간을 0초로 설정하여 즉시 사라지도록 설정
             bb_left, bb_top, bb_width, bb_height = track[2:6]
             marker.pose.position.x = bb_left + bb_width / 2
             marker.pose.position.y = bb_top + bb_height / 2
@@ -187,6 +208,34 @@ class LidarProcessor:
             marker_array.markers.append(marker)
         self.marker_tracker_pub.publish(marker_array)
 
+    def delete_destination_marker(self):
+        delete_marker = Marker()
+        delete_marker.action = Marker.DELETEALL
+        self.marker_destination_pub.publish(delete_marker)
+        
+    def publish_destination_marker(self, x, y, z):
+        self.delete_destination_marker()
+        marker = Marker()
+        marker.header.frame_id = "velodyne"
+        marker.type = marker.SPHERE
+        marker.action = marker.ADD
+        marker.lifetime = rospy.Duration(0)  # 마커가 지속되는 시간을 0초로 설정하여 즉시 사라지도록 설정
+
+        marker.pose.position.x = x
+        marker.pose.position.y = y
+        marker.pose.position.z = z
+        marker.pose.orientation.x = 0.0
+        marker.pose.orientation.y = 0.0
+        marker.pose.orientation.z = 0.0
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.5  # 크기 조정
+        marker.scale.y = 0.5
+        marker.scale.z = 0.5
+        marker.color = ColorRGBA(0.0, 1.0, 0.0, 1.0)  # 초록색
+        
+        
+        self.marker_destination_pub.publish(marker)
+        
     def rotate_point_cloud_by_z(self, pcd):
         """
         Rotate the point cloud by 90 degrees around the Z-axis.
@@ -234,8 +283,8 @@ class LidarProcessor:
         # pcd = self.rotate_point_cloud_by_z(pcd)
 
         
-        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z
-        # pcd = self.crop_roi(pcd, start=[-10, -10, -3], end=[10, 10, 3]) # axis - 정면 x, 왼쪽 y, 위 z
+        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z
+        pcd = self.crop_roi(pcd, start=[-10, -10, -3], end=[10, 10, 3]) # axis - 정면 x, 왼쪽 y, 위 z
         
         pcd = self.rotate_point_cloud_by_pitch(pcd)  # 여기에서 포인트 클라우드 회전 적용
         ship_body_bounds = {'min': [-0.925, -0.35, -0.6], 'max': [0.95, 0.35, 0.1]}  # 선체가 위치하는 영역을 지정

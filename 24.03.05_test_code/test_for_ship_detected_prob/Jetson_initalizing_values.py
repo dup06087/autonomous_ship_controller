@@ -29,5 +29,5 @@ def initialize_variables(self):
     
     rospy.init_node("pointcloud_listener_and_publisher", anonymous=True) ### blocks if roslaunch not executed
     
-    
-    
+    self.throttle_component = None
+    self.roll_component = None
