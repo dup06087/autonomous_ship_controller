@@ -8,6 +8,7 @@ import numpy as np
 def auto_drive(self):
     print("in the auto driving")
     self.cnt_destination = 0
+    counter_dead_autodrive = 0
     prev_destination_latitude = []
     destination_latitude = []
     prev_destination_longitude = []
@@ -46,17 +47,23 @@ def auto_drive(self):
             
             # print("flag check : ", self.flag_check_for_autodrive())
             if not flag_ready_to_auto_drive: # not ready                   
-                self.current_value["pwml_auto"] = 1500
-                self.current_value["pwmr_auto"] = 1500    
+                counter_dead_autodrive += 1
+                if counter_dead_autodrive >= 5: # time sleep 0.2s * 5
+                    self.current_value["pwml_auto"] = 1500
+                    self.current_value["pwmr_auto"] = 1500
+                
                 # cnt_destination still alive
                 time_ = time.time()
                 if time_ - prev_time >= 3:
                     print("manual driving")
                     prev_time = time_
+                
+                time.sleep(0.2)
 
             else: ### ready to auto drive
                 self.current_value["arrived"] = False
-                
+                counter_dead_autodrive = 0
+
                 
                 """ comment out here to exclude vff """
                 try:
@@ -70,11 +77,12 @@ def auto_drive(self):
                 except Exception as e:
                     self.flag_avoidance = False
                     print("no obstacle : ", e)
-                ''' end '''
+                # ''' end '''
                 
                 # add flag avoidance
-                # self.flag_avoidance = False
-                    
+                self.flag_avoidance = False
+                
+                
                 if self.flag_avoidance:
                     destination_latitude = float(self.current_value["waypoint_latitude"])
                     destination_longitude = float(self.current_value["waypoint_longitude"])
@@ -127,7 +135,7 @@ def auto_drive(self):
         except Exception as e:
             self.current_value['pwml_auto'] = 1500
             self.current_value['pwmr_auto'] = 1500
-            print("auto driving error : ", e)
+            # print("auto driving error : ", e)
             time.sleep(0.2)
 
 def calculate_pwm_auto(self, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading, Kf = 2.5, Kd = 0.318):

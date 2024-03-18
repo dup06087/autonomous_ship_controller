@@ -49,11 +49,8 @@ class serial_gnss:
         return None
 
     def _data_receive_part(self):
-        count_alive = 0
         while self.running:
-            # print("running")
             try:
-                # print(self.id)
                 time.sleep(0.2)  # '''time control'''
                 lines = []
 
@@ -83,7 +80,7 @@ class serial_gnss:
                     elif len(lines) == 1:
                         line_ = lines
                     else:
-                        # print("empty lines : length : ", len(lines))
+                        print("empty lines : length : ", len(lines))
                         line_ = ''
 
                     if line_:
@@ -93,7 +90,7 @@ class serial_gnss:
                     print("gnss in lines check : ", lines, line_)
 
             except Exception as e:
-                print("GNSS Error : ", e)
+                print("GNSS Error data receive part : ", e)
                 # lines = []
                 # self.close()
                 
@@ -107,7 +104,7 @@ class serial_gnss:
                 if data:
                     self.process_to_single_data(data)
                     count_alive = 0
-                    print("gnss serial count ", count_alive)
+                    # print("gnss serial count ", count_alive)
                 else:
                     count_alive += 1
                     if count_alive >= 5:

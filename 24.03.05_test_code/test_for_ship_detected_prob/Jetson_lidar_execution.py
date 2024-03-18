@@ -161,7 +161,7 @@ class LidarProcessor:
         
         # Convert pitch from degrees to radians
         # pitch_rad = np.radians(self.pitch)
-        pitch_rad = np.radians(-self.pitch + 1)
+        pitch_rad = np.radians(self.pitch)
         
         # Create the rotation matrix for pitch
         # R = np.array([[1, 0, 0],
@@ -274,17 +274,17 @@ class LidarProcessor:
 
         time_ = time.time()
         time_diff = rospy.Time.now() - pointcloud2_msg.header.stamp
-        # if time_diff.to_sec() > 0.05: # realtime
-        #     return
-
-        if time_diff.to_sec() > 0.1: # rosbag
+        if time_diff.to_sec() > 0.05: # realtime
             return
+
+        # if time_diff.to_sec() > 0.1: # rosbag
+        #     return
         
         pcd = self.pc2_to_o3d(pointcloud2_msg)
         # pcd = self.rotate_point_cloud_by_z(pcd)
 
-        
-        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z
+        # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z
+        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
         # pcd = self.crop_roi(pcd, start=[-10, -10, -3], end=[10, 10, 3]) # axis - 정면 x, 왼쪽 y, 위 z
         
         pcd = self.rotate_point_cloud_by_pitch(pcd)  # 여기에서 포인트 클라우드 회전 적용

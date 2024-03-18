@@ -9,7 +9,7 @@ port = "/dev/pts/6"  # 실제 사용하는 포트 번호로 변경
 baudrate = 115200
 
 # 파일 경로 설정
-gps_data_file = './24.03.05_test_code/gps_transmitter/gps_data_10.txt'  # GPS 데이터가 저장된 파일 경로
+gps_data_file = './24.03.05_test_code/gps_transmitter/24.03.15_log.txt'  # GPS 데이터가 저장된 파일 경로
 # gps_data_file = './24.03.05_test_code/gps_transmitter/extracted_hrp_rmc.txt'  # GPS 데이터가 저장된 파일 경로
 
 # 시리얼 포트 초기화

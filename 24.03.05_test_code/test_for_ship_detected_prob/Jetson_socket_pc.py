@@ -4,7 +4,7 @@ import json
 import time
 
 class Server_pc:
-    def __init__(self, boat_instance, receive_coeff_port= 5000, receive_port=5003, send_port=5004, send_obstacle_port=5005):
+    def __init__(self, boat_instance, receive_coeff_port= 5002, receive_port=5003, send_port=5004, send_obstacle_port=5005):
         self.boat = boat_instance
         self.receive_port = receive_port
         self.receive_coeff_port = receive_coeff_port
@@ -22,7 +22,7 @@ class Server_pc:
         while True:
             try:
                 data = receive_socket.recv(1024).strip()
-                if not data:
+                if not data: # client unconnected
                     self.flag_socket_pc[0] = False
                     break
 
@@ -35,7 +35,8 @@ class Server_pc:
                     self.flag_socket_pc[0] = True
                     receive_socket.sendall("ack".encode())  # Acknowledgment 메시지 보내기
 
-                except (json.JSONDecodeError, TypeError, ValueError):
+                except (json.JSONDecodeError, TypeError, ValueError) as e:
+                    print("receive message error : ", e)
                     current_time = time.time()
                     if current_time - last_print_time >= 3:
                         print("Invalid data format: ", data)
@@ -67,10 +68,10 @@ class Server_pc:
                     receive_socket.sendall("ack".encode())  # Acknowledgment 메시지 보내기
                     print("coeff : ", self.pc_coeff)
 
-                except (json.JSONDecodeError, TypeError, ValueError):
+                except (json.JSONDecodeError, TypeError, ValueError) as e:
                     current_time = time.time()
                     if current_time - last_print_time >= 3:
-                        print("Invalid data format: ", data)
+                        print("Invalid data format: ", data, e)
                         last_print_time = current_time
 
             except (ConnectionResetError, BrokenPipeError) as e:
@@ -104,9 +105,9 @@ class Server_pc:
                 print("Send obstacle data connection lost. Attempting to reconnect...", e)
                 self.flag_socket_pc[2] = False
                 break
-            except ConnectionResetError:
+            except ConnectionResetError as e:
                 self.flag_socket_pc[2] = False
-                print("Connection for obstacle data was reset by the server. Attempting to reconnect...")
+                print("Connection for obstacle data was reset by the server. Attempting to reconnect...", e)
                 break
             except Exception as e:
                 print("data error : ", e)
@@ -193,7 +194,6 @@ class Server_pc:
                 send_thread.start()
                 send_obstacle_thread.start()
                                 
-                
                 receive_thread.join()
                 receive_coeff_thread.join()
                 send_thread.join()
