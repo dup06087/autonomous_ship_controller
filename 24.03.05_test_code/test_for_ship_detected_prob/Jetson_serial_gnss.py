@@ -18,7 +18,9 @@ class serial_gnss:
         # self.sender_to_lidar = Jetson_gps_send_to_gnss.UdpBroadcaster(10110)
 
         self.flag_gnss = False
-
+        self.cnt_receive = 0
+        self.cnt_process = 0
+        
         self.gnss_lock = lock
         self.id = id
         
@@ -80,7 +82,7 @@ class serial_gnss:
                     elif len(lines) == 1:
                         line_ = lines
                     else:
-                        print("empty lines : length : ", len(lines))
+                        # print("empty lines : length : ", len(lines))
                         line_ = ''
 
                     if line_:
@@ -98,6 +100,7 @@ class serial_gnss:
         count_alive = 0
         while self.running:
             try:
+                print("gnss error cnt : ", self.cnt_receive, self.cnt_process, self.flag_gnss)
                 time.sleep(0.2)     #'''time control'''
                 data = self.get_from_queue()
                 # print("1. gnss data : ", data)
@@ -134,6 +137,7 @@ class serial_gnss:
 
             if header in ['$GPRMC', '$GNRMC']:
                 self._process_gnrmc_data(tokens)
+
                 # self.send_to_lidar(decoded_data)
                 # print("gnrmc_data processing done")
                 
@@ -157,8 +161,10 @@ class serial_gnss:
         try:
             validity = tokens[2]
             if validity == "V": # V : invalid, A : valid
+                self.cnt_receive += 1
                 self.current_value['validity'] = validity
-                self.flag_gnss = False
+                if self.cnt_receive >= 5:
+                    self.flag_gnss = False
                 # print("validity : ", validity)
                 # print("current validity : ", self.current_value["validity"])
                 # print("inner current value : ", self.current_value)
@@ -176,6 +182,7 @@ class serial_gnss:
             self.current_value['longitude'] = round(lon_deg + lon_min / 60, 8)
 
             self.current_value['velocity'] = float(tokens[7])
+            self.cnt_receive = 0
 
         except ValueError as e:
             print(f"Error processing GNRMC data: {e}")
@@ -189,14 +196,17 @@ class serial_gnss:
             self.current_value['pitch'] = float(tokens[6])
 
             self.flag_gnss = True
+            self.cnt_process = 0
 
         except ValueError as e:
             # when heading pitch is not comming heading pitch raw data comes '' not None
             # print(f"heading pitch not came: {e}")
-            self.current_value['heading'] = None
-            self.current_value['pitch'] = None
     
-            self.flag_gnss = False
+            self.cnt_process += 1
+            if self.cnt_process >= 5:
+                self.current_value['heading'] = None
+                self.current_value['pitch'] = None
+                self.flag_gnss = False
             
         except Exception as e:
             print("processing pssn error : ", e)

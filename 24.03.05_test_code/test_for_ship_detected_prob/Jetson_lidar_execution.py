@@ -283,9 +283,9 @@ class LidarProcessor:
         pcd = self.pc2_to_o3d(pointcloud2_msg)
         # pcd = self.rotate_point_cloud_by_z(pcd)
 
-        # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z
-        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
-        # pcd = self.crop_roi(pcd, start=[-10, -10, -3], end=[10, 10, 3]) # axis - 정면 x, 왼쪽 y, 위 z
+        # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # no obstacle, little bigger than crop roi 
+        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
+        pcd = self.crop_roi(pcd, start=[-0.3, -0, 0], end=[0.3, 2, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # test
         
         pcd = self.rotate_point_cloud_by_pitch(pcd)  # 여기에서 포인트 클라우드 회전 적용
         ship_body_bounds = {'min': [-0.925, -0.35, -0.6], 'max': [0.95, 0.35, 0.1]}  # 선체가 위치하는 영역을 지정
@@ -302,7 +302,7 @@ class LidarProcessor:
         self.pub.publish(pc2_msg)
 
         self.bbox_lists = [bbox[2:6] for bbox in tracks]
-        # print(self.bbox_lists)
+        # print("bbox lists ", self.bbox_lists)
         
         # self.calculate_vff_force(self.bbox_lists)
         

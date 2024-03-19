@@ -5,11 +5,11 @@ import time
 
 
 # 사용할 가상 시리얼 포트 지정
-port = "/dev/pts/6"  # 실제 사용하는 포트 번호로 변경
+port = "/dev/pts/3"  # 실제 사용하는 포트 번호로 변경
 baudrate = 115200
 
 # 파일 경로 설정
-gps_data_file = './24.03.05_test_code/gps_transmitter/24.03.15_log.txt'  # GPS 데이터가 저장된 파일 경로
+gps_data_file = './extracted_hrp_rmc.txt'  # GPS 데이터가 저장된 파일 경로
 # gps_data_file = './24.03.05_test_code/gps_transmitter/extracted_hrp_rmc.txt'  # GPS 데이터가 저장된 파일 경로
 
 # 시리얼 포트 초기화
@@ -28,7 +28,7 @@ try:
                     print(f"Sent data: {line}")
 
                 # 1초 대기
-                time.sleep(1)
+                time.sleep(0.2)
 
             except StopIteration:
                 # 파일의 끝에 도달했으면, 파일 포인터를 다시 시작으로 이동

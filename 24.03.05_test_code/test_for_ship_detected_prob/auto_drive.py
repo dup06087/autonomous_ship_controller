@@ -160,7 +160,7 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         self.throttle_component = self.distance_to_target * math.cos(math.radians(angle_diff))
         self.roll_component = self.distance_to_target * math.sin(math.radians(angle_diff))
 
-        print("throttle, roll : ",self.throttle_component, self.roll_component)
+        # print("throttle, roll : ",s/elf.throttle_component, self.roll_component)
         # Kf = 2.5
         # # Kd = 0.25 * 800 / (2 * math.pi * 100)
         # Kd = 0.318
@@ -255,7 +255,7 @@ def calculate_vff_force(self, obstacles):
     total_force = total_repulsive_force + attraction_force * attraction_direction
     self.vff_force = total_force.tolist()  ### final output >> subscribe and show in rviz
     
-    print("vff force : ", self.vff_force)
+    # print("vff force : ", self.vff_force)
     
     
     
