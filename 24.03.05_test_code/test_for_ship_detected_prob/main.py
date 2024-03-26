@@ -40,8 +40,8 @@ class boat:
 
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
-            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/4", self.gnss_lock, 1)
+            self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
+            # self.serial_gnss_cpy = serial_gnss("/dev/pts/4", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -98,7 +98,6 @@ class boat:
                             print("collect data error : {}".format(e))
                         # pass
       
-
                 # print("collected current value : ", self.current_value)
                 time.sleep(0.2)
         except Exception as e:
@@ -158,16 +157,20 @@ class boat:
         # self.lidar_processor.pitch = random.randint(0,90)
         
     def flag_check_for_autodrive(self):
-        flag_devices = self.flag_check(self.flag_devices()) #True or False
+        self.autodrive_output_flag = self.flag_devices()
+        flag_devices = self.flag_check(self.autodrive_output_flag) #True or False
         
         flag_data = self.data_check_all_device()
         
         
         self.flag_autodrive = flag_devices and flag_data[0] ### final ready flag
         if self.flag_autodrive == False and self.current_value["mode_pc_command"] == "AUTO":
-            print("some device not ready : ", self.flag_devices())
+            print("some device not ready : ", self.autodrive_output_flag)
         # print("flag1 : ", flag_devices, ", flag_data : ", flag_data, ", flag_autodrive : ", flag_autodrive)
         flag_output = [self.flag_autodrive, flag_data[1], flag_data[2], flag_data[3], flag_data[4], flag_data[5]]
+        
+        
+        
         return flag_output
         # [ready or not(bool), lat, lon, dest_lat, dest_lon, heading]
 
@@ -206,7 +209,7 @@ class boat:
         flag_ready_gnss_data = (lat is not None and lon is not None and dest_lat is not None and dest_lon is not None and heading is not None)
         flag_ready_nucleo_data = (not self.current_value["mode_chk"] <= 20) # mode_chk == 0 >> need to bind
         flag_auto_drive_command =(self.current_value["mode_pc_command"] == "AUTO")
-        print(lat, lon, dest_lat, dest_lon, heading)
+        # print(lat, lon, dest_lat, dest_lon, heading)
         # print("flag_ready_gnss_data : ", flag_ready_gnss_data, ", flag_ready_nucleo_data : ", flag_ready_nucleo_data, ", flag_auto_drive_command : ", flag_auto_drive_command)
         return [flag_ready_nucleo_data and flag_ready_gnss_data and flag_auto_drive_command, lat, lon, dest_lat, dest_lon, heading]
         # [ready or not(bool), lat, lon, dest_lat, dest_lon, heading]

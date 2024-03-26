@@ -31,3 +31,5 @@ def initialize_variables(self):
     
     self.throttle_component = None
     self.roll_component = None
+    
+    self.autodrive_output_flag = False

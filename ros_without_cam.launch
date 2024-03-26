@@ -1,0 +1,7 @@
+<launch>
+    <!-- Velodyne Pointcloud Node -->
+    <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch"/>
+
+    <!-- Ship Visualization Node -->
+    <include file="$(find ship_visualization)/launch/view_model.launch"/>
+</launch>

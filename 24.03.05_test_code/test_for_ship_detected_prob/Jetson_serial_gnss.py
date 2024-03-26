@@ -8,7 +8,7 @@ class serial_gnss:
     def __init__(self, port, lock, id, baudrate=115200):
         self.port = port
         self.baudrate = baudrate
-        self.serial_port = serial.Serial(self.port, self.baudrate, timeout=2)
+        self.serial_port = serial.Serial(self.port, self.baudrate, timeout=10)
 
         self.receive_queue = Queue()
         self.running = True
@@ -55,23 +55,19 @@ class serial_gnss:
             try:
                 time.sleep(0.2)  # '''time control'''
                 lines = []
-
                 while self.serial_port.in_waiting:
                     try:
                         line = self.serial_port.readline()
                         if line:
                             lines.append(line)
-                    
                     except serial.SerialException:
                         for key in self.current_value.keys():
                             self.current_value[key] = None
                         self.flag_gnss = False
-
-                        self.close()
                         
 
                     except Exception as e:
-                        print("readline error : ", e) 
+                        print("gnss readline error : ", e) 
                         print("gnss variable line : ", line)  ## must be one value
 
                 try:
@@ -100,7 +96,7 @@ class serial_gnss:
         count_alive = 0
         while self.running:
             try:
-                print("gnss error cnt : ", self.cnt_receive, self.cnt_process, self.flag_gnss)
+                # print("gnss error cnt : ", self.cnt_receive, self.cnt_process, self.flag_gnss)
                 time.sleep(0.2)     #'''time control'''
                 data = self.get_from_queue()
                 # print("1. gnss data : ", data)
@@ -123,10 +119,9 @@ class serial_gnss:
             self.process_received_data(data)
 
     def process_received_data(self, data):
-        
         try:
             decoded_data = data.decode('utf-8').strip()
-            # print("2. decoded/_data : ", decoded_data)
+            # print("2. decoded_data : ", decoded_data)
             if not decoded_data.startswith('$'):
                 time.sleep(0.2)
                 return
@@ -219,8 +214,8 @@ if __name__ == "__main__":
     cnt = 0
     gnss_lock =  threading.Lock()
     try:
-        serial_cpy = serial_gnss("/dev/ttyACM2") # origin name
-        # serial_cpy = serial_gnss("/dev/tty_septentrio0", gnss_lock, 1) # tty fixed name
+        # serial_cpy = serial_gnss("/dev/ttyACM2") # origin name
+        serial_cpy = serial_gnss("/dev/tty_septentrio0", gnss_lock, 1) # tty fixed name
         # serial_cpy = serial_gnss("/dev/pts/5", gnss_lock, 1) # Virtual Port 
         serial_cpy_thread = threading.Thread(target=serial_cpy.run)
         serial_cpy_thread.start()
@@ -232,26 +227,3 @@ if __name__ == "__main__":
         print(serial_cpy.current_value)
         time.sleep(1)
         
-        # try:
-            
-        #     try:
-        #         try:
-        #             print("gnss current value : ",serial_cpy.current_value)
-        #         except Exception as e:
-        #             print("gnss log : ", e)
-        #         if serial_cpy.process_receive_thread.is_alive() == False:
-        #             del serial_cpy
-        #             del serial_cpy_thread  
-        #             serial_cpy = None
-        #             serial_cpy_thread = None
-
-        #     except:
-        #         # serial_cpy = serial_gnss("/dev/ttyACM0")
-        #         serial_cpy = serial_gnss("/dev/septentrio2", gnss_lock, 2)
-        #         serial_cpy_thread = threading.Thread(target=serial_cpy.run)
-        #         serial_cpy_thread.start()
-                
-        # except Exception as e:
-        #     print("error 2 : ", e)
-                
-        # time.sleep(2)

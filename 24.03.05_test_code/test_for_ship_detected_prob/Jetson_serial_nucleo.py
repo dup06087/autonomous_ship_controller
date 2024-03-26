@@ -69,7 +69,7 @@ class serial_nucleo:
 
 
             except Exception as e:
-                print(f"Error while receiving data: {e}")
+                print(f"Error while nucleo receiving data: {e}")
                 # self.flag_nucleo_alive = False
 
     def data_processing_part(self):

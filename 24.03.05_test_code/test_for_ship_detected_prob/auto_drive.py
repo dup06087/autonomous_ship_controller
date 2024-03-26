@@ -47,10 +47,14 @@ def auto_drive(self):
             
             # print("flag check : ", self.flag_check_for_autodrive())
             if not flag_ready_to_auto_drive: # not ready                   
-                counter_dead_autodrive += 1
-                if counter_dead_autodrive >= 5: # time sleep 0.2s * 5
-                    self.current_value["pwml_auto"] = 1500
-                    self.current_value["pwmr_auto"] = 1500
+                # counter_dead_autodrive += 1
+                # if counter_dead_autodrive >= 5: # time sleep 0.2s * 5
+                self.current_value["pwml_auto"] = 1500
+                self.current_value["pwmr_auto"] = 1500
+                
+                if self.current_value["mode_pc_command"] == "AUTO":
+                    with open('log_flag.txt', 'a') as file:
+                        file.write(f"{self.autodrive_output_flag}\n")
                 
                 # cnt_destination still alive
                 time_ = time.time()
@@ -63,7 +67,6 @@ def auto_drive(self):
             else: ### ready to auto drive
                 self.current_value["arrived"] = False
                 counter_dead_autodrive = 0
-
                 
                 """ comment out here to exclude vff """
                 try:

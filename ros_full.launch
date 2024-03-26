@@ -1,0 +1,11 @@
+<launch>
+    <!-- USB Camera Node -->
+    <node name="usb_cam_node" pkg="usb_cam" type="usb_cam_node" output="screen"/>
+
+    <!-- Velodyne Pointcloud Node -->
+    <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch"/>
+
+    <!-- Ship Visualization Node -->
+    <include file="$(find ship_visualization)/launch/view_model.launch"/>
+
+</launch>

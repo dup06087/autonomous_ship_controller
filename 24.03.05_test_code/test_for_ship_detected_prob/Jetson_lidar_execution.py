@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pc2
 import open3d as o3d
 import numpy as np
@@ -24,6 +24,7 @@ class LidarProcessor:
         self.last_data_time = None
         self.flag_lidar = False
         self.lidar_processing_time = 0        
+        self.cnt_no_pcd = 0
         
         self.vff_force = []
         self.init_coeff()
@@ -35,7 +36,6 @@ class LidarProcessor:
 
         
         self.monitor_thread = threading.Thread(target=self.monitor_lidar_data)
-        self.monitor_thread.daemon = True
         self.monitor_thread.start()
         
         self.changing_heading = 0
@@ -178,7 +178,7 @@ class LidarProcessor:
         
         return pcd
 
-    def delete_all_markers(self):
+    def delete_all_bbox_markers(self):
         marker_array = MarkerArray()
         delete_marker = Marker()
         delete_marker.action = Marker.DELETEALL
@@ -186,7 +186,7 @@ class LidarProcessor:
         self.marker_tracker_pub.publish(marker_array)
         
     def marking_tracks(self, tracks):
-        self.delete_all_markers()
+        # self.delete_all_bbox_markers()
         
         marker_array = MarkerArray()
         for i, track in enumerate(tracks):
@@ -268,7 +268,35 @@ class LidarProcessor:
                 else:
                     self.flag_lidar = True
             time.sleep(1)  # 1초에 한 번씩 체크
-            
+
+    def publish_empty_pointcloud2(self):
+        header = std_msgs.msg.Header()
+        header.stamp = rospy.Time.now()
+        header.frame_id = 'velodyne'
+        
+        # 포인트 필드 정의
+        fields = [PointField('x', 0, PointField.FLOAT32, 1),
+                PointField('y', 4, PointField.FLOAT32, 1),
+                PointField('z', 8, PointField.FLOAT32, 1)]
+        
+        # 빈 포인트 클라우드 데이터
+        points = []
+
+        # 빈 포인트 클라우드 메시지 생성
+        empty_pc2_msg = PointCloud2()
+        empty_pc2_msg.header = header
+        empty_pc2_msg.height = 1
+        empty_pc2_msg.width = len(points)
+        empty_pc2_msg.is_dense = False
+        empty_pc2_msg.is_bigendian = False
+        empty_pc2_msg.fields = fields
+        empty_pc2_msg.point_step = 12  # FLOAT32 (4 bytes) * 3 (x, y, z)
+        empty_pc2_msg.row_step = empty_pc2_msg.point_step * empty_pc2_msg.width
+        empty_pc2_msg.data = []
+
+        # 빈 포인트 클라우드 메시지 publish
+        self.pub.publish(empty_pc2_msg)
+    
     def callback(self, pointcloud2_msg):
         self.last_data_time = time.time()
 
@@ -283,16 +311,34 @@ class LidarProcessor:
         pcd = self.pc2_to_o3d(pointcloud2_msg)
         # pcd = self.rotate_point_cloud_by_z(pcd)
 
+        # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[1.5, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # little bit front for check 
         # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # no obstacle, little bigger than crop roi 
-        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
-        pcd = self.crop_roi(pcd, start=[-0.3, -0, 0], end=[0.3, 2, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # test
+        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[10, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
+        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
+        # pcd = self.crop_roi(pcd, start=[-20, -20, -5], end=[20, 20, 5]) # axis - 정면 x, 왼쪽 y, 위 z # test
         
         pcd = self.rotate_point_cloud_by_pitch(pcd)  # 여기에서 포인트 클라우드 회전 적용
         ship_body_bounds = {'min': [-0.925, -0.35, -0.6], 'max': [0.95, 0.35, 0.1]}  # 선체가 위치하는 영역을 지정
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
        
         pcd = self.voxelization(pcd, voxel_size=self.voxel_size)
+        
+        # print("bbox lists ", self.bbox_lists)
+        if len(pcd.points) == 0:  # 포인트 클라우드 내 포인트의 수가 0인지 확인
+            self.cnt_no_pcd += 1
+            if self.cnt_no_pcd >= 5:
+                self.bbox_lists = []
+                self.publish_empty_pointcloud2()  # 수정된 부분
+                self.delete_all_bbox_markers()
+                print("init bbox : no pcd found, count : ", self.cnt_no_pcd)
+                        
+
+            return
+        
+        self.cnt_no_pcd = 0
+
         pcd, labels = self.DBSCAN(pcd, eps=self.dbscan_eps, min_points=int(self.dbscan_minpoints))
+        
         bounding_boxes_o3d = self.compute_bounding_boxes(pcd, labels)
 
         tracks = self.do_tracker(bounding_boxes_o3d)
@@ -303,7 +349,6 @@ class LidarProcessor:
 
         self.bbox_lists = [bbox[2:6] for bbox in tracks]
         # print("bbox lists ", self.bbox_lists)
-        
         # self.calculate_vff_force(self.bbox_lists)
         
         self.lidar_processing_time = time.time() - time_
@@ -344,6 +389,3 @@ if __name__ == "__main__":
     while True:
         time.sleep(1)
         print("lidar status : ", lidar_processor.flag_lidar)
-
-        
-        
