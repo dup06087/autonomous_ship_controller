@@ -1,6 +1,6 @@
 import rospy
 import std_msgs.msg
-
+import time
 
 def initialize_variables(self):
     self.end = 0
@@ -33,3 +33,5 @@ def initialize_variables(self):
     self.roll_component = None
     
     self.autodrive_output_flag = False
+    t = time.localtime()
+    self.log_time = time.strftime("%H:%M:%S", t)

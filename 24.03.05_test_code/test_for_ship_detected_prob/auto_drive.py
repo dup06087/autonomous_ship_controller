@@ -25,6 +25,9 @@ def auto_drive(self):
             # TODO : after controller on > check to see if autodriving well
             
             # true/false, lat, log, dest_lat, dest_lon
+                            
+            t = time.localtime()
+            current_time = time.strftime("%H:%M:%S", t)
             
             if flag_arrived:
                 self.current_value["dest_latitude"] = None
@@ -54,7 +57,7 @@ def auto_drive(self):
                 
                 if self.current_value["mode_pc_command"] == "AUTO":
                     with open('log_flag.txt', 'a') as file:
-                        file.write(f"{self.autodrive_output_flag}\n")
+                        file.write(f"{self.log_time} : {self.autodrive_output_flag}\n")
                 
                 # cnt_destination still alive
                 time_ = time.time()
@@ -95,6 +98,12 @@ def auto_drive(self):
                     destination_latitude = float(self.current_value['dest_latitude'][self.cnt_destination])
                     destination_longitude = float(self.current_value['dest_longitude'][self.cnt_destination])
                     calculate_pwm_auto(self, current_latitude,current_longitude,float(self.current_value['dest_latitude'][self.cnt_destination]),float(self.current_value['dest_longitude'][self.cnt_destination]),current_heading, Kf = self.current_value['coeff_kf'], Kd = self.current_value['coeff_kd'])
+
+                t = time.localtime()    
+                log_time = time.strftime("%H:%M:%S", t)
+
+                with open('log_pwm.txt', 'a') as file:
+                    file.write("{} : {},{}\n".format(log_time, self.current_value["pwml_auto"], self.current_value["pwmr_auto"]))
                 
                 ''' self.distance_to_target 값 none 아닌지 확인하는 코드 추가'''
                 if float(self.distance_to_target) <= 3:

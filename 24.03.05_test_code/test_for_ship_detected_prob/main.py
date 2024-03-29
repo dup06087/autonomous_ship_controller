@@ -40,8 +40,8 @@ class boat:
 
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
-            self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            # self.serial_gnss_cpy = serial_gnss("/dev/pts/4", self.gnss_lock, 1)
+            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/5", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -99,7 +99,17 @@ class boat:
                         # pass
       
                 # print("collected current value : ", self.current_value)
+                
+                ''' current value logger '''
+                t = time.localtime()
+                self.log_time = time.strftime("%H:%M:%S", t)
+                with open('log_current_value.txt', 'a') as file:
+                    file.write(f"{self.log_time} : {self.current_value}\n")
+                        
                 time.sleep(0.2)
+                
+                
+                
         except Exception as e:
             print("data collecting error : ", e)
 
@@ -243,8 +253,9 @@ class boat:
             time_ = time.time()
             if time_ - time_prev >= 3:
                 try:
-                    print("from Nucleo : ", self.serial_nucleo_cpy.nucleo_feedback_values)
-                    print("to Nucleo : ", self.serial_nucleo_cpy.nucleo_sended_data)
+                    pass
+                    # print("from Nucleo : ", self.serial_nucleo_cpy.nucleo_feedback_values)
+                    # print("to Nucleo : ", self.serial_nucleo_cpy.nucleo_sended_data)
                 except:
                     pass
                 try:
@@ -268,7 +279,8 @@ class boat:
                     pass
                 
                 try:
-                    print("flag for autodriving : [(nucleo,gps,command), lat, lon, dest_lat, dest_lon, heading]", self.flag_check_for_autodrive())
+                    pass
+                    # print("flag for autodriving : [(nucleo,gps,command), lat, lon, dest_lat, dest_lon, heading]", self.flag_check_for_autodrive())
                 except:
                     pass
                     
