@@ -229,8 +229,7 @@ class Server_pc:
                             break
                                     
                     while all(self.flag_socket_pc):
-                        
-                        print("running")
+                        print("pc communicating well")
                         time.sleep(5)
                         
                     print("thread end regenerating")

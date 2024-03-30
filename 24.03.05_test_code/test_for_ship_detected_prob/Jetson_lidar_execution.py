@@ -7,6 +7,8 @@ import open3d as o3d
 import numpy as np
 from ros_numpy.point_cloud2 import pointcloud2_to_array
 from visualization_msgs.msg import Marker, MarkerArray
+from geometry_msgs.msg import Quaternion
+
 import std_msgs.msg
 from matplotlib import pyplot as plt
 import time
@@ -14,11 +16,12 @@ from motrackers.tracker import Tracker
 import math
 import threading
 from std_msgs.msg import ColorRGBA
+from scipy.spatial.transform import Rotation as R
 
 class LidarProcessor:
     def __init__(self):
         self.pitch = None
-        self.tracker = Tracker(max_lost=10)
+        self.tracker = Tracker(max_lost=5)
         self.bboxes = []
         self.bbox_lists = []
         self.last_data_time = None
@@ -83,7 +86,8 @@ class LidarProcessor:
             point_indices = np.where(labels == i)[0]
             if len(point_indices) > 0:
                 cluster = pcd.select_by_index(point_indices)
-                bounding_box = cluster.get_axis_aligned_bounding_box()
+                bounding_box = cluster.get_axis_aligned_bounding_box()  ### original
+                # bounding_box = cluster.get_oriented_bounding_box() #### rotation
                 bounding_boxes.append(bounding_box)
         return bounding_boxes
 
@@ -114,11 +118,23 @@ class LidarProcessor:
         points_xyz = np.asarray(pcd_o3d.points)
         return pc2.create_cloud_xyz32(header, points_xyz)
 
-    def do_tracker(self, bounding_boxes_o3d): # input : (top-left-x, top-left-y, width, height)
+
+    def do_tracker(self, bounding_boxes_o3d): # input : (top-left-x, top-left-y, width, height) #### original
         self.bboxes = [(bbox.min_bound[0], bbox.min_bound[1], bbox.max_bound[0] - bbox.min_bound[0], bbox.max_bound[1] - bbox.min_bound[1]) for bbox in bounding_boxes_o3d]
         detection_scores = [1.0] * len(self.bboxes)
         class_ids = [0] * len(self.bboxes)
-        return self.tracker.update(self.bboxes, detection_scores, class_ids) # return : (frame_id, track_id, bb_left, bb_top, bb_width, bb_height, conf, x, y, z).
+        tracked_objects = self.tracker.update(self.bboxes, detection_scores, class_ids) # return : (frame_id, track_id, bb_left, bb_top, bb_width, bb_height, conf, x, y, z).
+            # 결과를 소수점 8자리까지 반올림
+        self.bbox_lists = [
+            (
+                round(bbox[2], 8),  # x
+                round(bbox[3], 8),  # y
+                round(bbox[4], 8),  # width
+                round(bbox[5], 8)   # height
+            )
+            for bbox in tracked_objects
+        ]
+        return tracked_objects
 
     def remove_ship_body(self, pcd, ship_body_bounds):
         """
@@ -186,7 +202,7 @@ class LidarProcessor:
         self.marker_tracker_pub.publish(marker_array)
         
     def marking_tracks(self, tracks):
-        # self.delete_all_bbox_markers()
+        self.delete_all_bbox_markers()
         
         marker_array = MarkerArray()
         for i, track in enumerate(tracks):
@@ -313,8 +329,8 @@ class LidarProcessor:
 
         # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[1.5, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # little bit front for check 
         # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # no obstacle, little bigger than crop roi 
-        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[10, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
-        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
+        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[10, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # front little short
+        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
         # pcd = self.crop_roi(pcd, start=[-20, -20, -5], end=[20, 20, 5]) # axis - 정면 x, 왼쪽 y, 위 z # test
         
         pcd = self.rotate_point_cloud_by_pitch(pcd)  # 여기에서 포인트 클라우드 회전 적용
@@ -347,7 +363,7 @@ class LidarProcessor:
         pc2_msg = self.o3d_to_pointcloud2(pcd)
         self.pub.publish(pc2_msg)
 
-        self.bbox_lists = [bbox[2:6] for bbox in tracks]
+        # self.bbox_lists = [bbox[2:6] for bbox in tracks]
         # print("bbox lists ", self.bbox_lists)
         # self.calculate_vff_force(self.bbox_lists)
         

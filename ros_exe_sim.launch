@@ -1,0 +1,4 @@
+<launch>
+    <!-- Ship Visualization Node -->
+    <include file="$(find ship_visualization)/launch/view_model.launch"/>
+</launch>

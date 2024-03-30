@@ -240,6 +240,8 @@ class boat:
         # lidar_processor.bbox_lists
         
     def thread_start(self):
+        prev_pc_command = None
+        
         self.lidar_thread()
         self.gnss_thread()
         self.nucleo_thread()
@@ -264,7 +266,9 @@ class boat:
                     pass
                 
                 try:
-                    print("from pc : ", self.jetson_socket_pc.pc_command)
+                    if prev_pc_command != self.jetson_socket_pc.pc_command:
+                        print("from pc : ", self.jetson_socket_pc.pc_command)
+                        prev_pc_command = self.jetson_socket_pc.pc_command
                 except:
                     pass
                 

@@ -106,7 +106,7 @@ class serial_nucleo:
             
         if "mode:" in decoded_data and "PWML:" in decoded_data and "PWMR:" in decoded_data:
             parsed_data = dict(item.split(":") for item in decoded_data.split(","))
-            print("parsed data : ", parsed_data)
+            # print("parsed data : ", parsed_data)
             mode_chk = parsed_data.get('mode', '-1').strip() # PERR : parse error
             mode_chk = int(mode_chk)
             pwml_chk = int(parsed_data.get('PWML', '-1').strip())
