@@ -56,7 +56,7 @@ def auto_drive(self):
                 self.current_value["pwmr_auto"] = 1500
                 
                 if self.current_value["mode_pc_command"] == "AUTO":
-                    with open('log_flag.txt', 'a') as file:
+                    with open('log_flag_stop.txt', 'a') as file:
                         file.write(f"{self.log_time} : {self.autodrive_output_flag}\n")
                 
                 # cnt_destination still alive

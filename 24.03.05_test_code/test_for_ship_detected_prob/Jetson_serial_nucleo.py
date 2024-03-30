@@ -91,7 +91,7 @@ class serial_nucleo:
 
                     # print("Data processing cycle time: {:.3f} seconds".format(processing_time))
             except Exception as e:
-                print(f"Error processing data: {e}")
+                print(f"nucleo Error processing get data: {e}\n >> data : ", data)
 
     # queue에서 받아온 것 처리해서 쓸모있는 것으로
     def process_received_data(self, data):
@@ -106,7 +106,9 @@ class serial_nucleo:
             
         if "mode:" in decoded_data and "PWML:" in decoded_data and "PWMR:" in decoded_data:
             parsed_data = dict(item.split(":") for item in decoded_data.split(","))
-            mode_chk = int(parsed_data.get('mode', '-1').strip()) # PERR : parse error
+            print("parsed data : ", parsed_data)
+            mode_chk = parsed_data.get('mode', '-1').strip() # PERR : parse error
+            mode_chk = int(mode_chk)
             pwml_chk = int(parsed_data.get('PWML', '-1').strip())
             pwmr_chk = int(parsed_data.get('PWMR', '-1').strip())
             # print("parsed : {}, {}, {} ".format(parsed_mode, parsed_pwml, parsed_pwmr))
@@ -169,7 +171,7 @@ class serial_nucleo:
                 self.send_data(sending_data)
             except Exception as e:
                 print(f"Nucleo communication error: {e}")
-                time.sleep(2)
+                # time.sleep(0.2)
 
 
     def send_data(self, data):

@@ -60,7 +60,8 @@ class serial_gnss:
                         line = self.serial_port.readline()
                         if line:
                             lines.append(line)
-                    except serial.SerialException:
+                    except serial.SerialException as e:
+                        print("gnss serial exception : ", e, " >> : gnss flag False")
                         for key in self.current_value.keys():
                             self.current_value[key] = None
                         self.flag_gnss = False
@@ -121,6 +122,11 @@ class serial_gnss:
     def process_received_data(self, data):
         try:
             decoded_data = data.decode('utf-8').strip()
+            t = time.localtime()    
+            log_time = time.strftime("%H:%M:%S", t)
+            with open("log_gnss_raw.txt", 'a') as file:
+                file.write(f"{log_time} : {decoded_data}\n")
+            
             # print("2. decoded_data : ", decoded_data)
             if not decoded_data.startswith('$'):
                 time.sleep(0.2)
