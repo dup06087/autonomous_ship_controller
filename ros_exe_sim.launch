@@ -1,4 +1,6 @@
 <launch>
     <!-- Ship Visualization Node -->
     <include file="$(find ship_visualization)/launch/view_model.launch"/>
+
+    <param name="/use_sim_time" value="true"/>
 </launch>

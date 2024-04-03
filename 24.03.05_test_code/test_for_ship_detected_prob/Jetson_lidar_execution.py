@@ -18,11 +18,15 @@ import threading
 from std_msgs.msg import ColorRGBA
 from scipy.spatial.transform import Rotation as R
 import cv2
+import copy
 
 class LidarProcessor:
     def __init__(self):
         self.pitch = None
         self.tracker = Tracker(max_lost=5)
+        self.prev_tracked_output = []
+
+        self.prev_tracked_output = []
         self.bboxes = []
         self.bbox_lists = []
         self.last_data_time = None
@@ -133,34 +137,55 @@ class LidarProcessor:
         header.frame_id = 'velodyne'
         points_xyz = np.asarray(pcd_o3d.points)
         return pc2.create_cloud_xyz32(header, points_xyz)
+    
+    def check_inclusion(self, tracked_objects, prev_tracked_output):
+        # [x, y, w, h]만 추출하여 넘파이 배열로 변환
+        tracked_bboxes = np.array([obj[:4] for obj in tracked_objects])
+        prev_tracked_bboxes = np.array([obj[:4] for obj in prev_tracked_output])
 
+        inclusion_flags = np.zeros(len(tracked_bboxes), dtype=bool)
 
+        for i, bbox in enumerate(tracked_bboxes):
+            matches = np.array([np.array_equal(bbox, prev_bbox) for prev_bbox in prev_tracked_bboxes])
+            inclusion_flags[i] = np.any(matches)
+
+        return inclusion_flags
 
     def do_tracker(self, bounding_boxes):
-        # bounding_boxes가 비어 있는 경우 처리
-        if not bounding_boxes:
-            print("bounding_boxes is empty.")
-            return []
-        
-        self.bboxes = [np.array(box).flatten() for box in bounding_boxes]  # 각 바운딩 박스를 1D 배열로 변환
-        detection_scores = [1.0] * len(self.bboxes)
-        class_ids = [0] * len(self.bboxes)
-        
-        # self.bboxes를 2D 배열로 변환
-        bboxes_array = np.array(self.bboxes, dtype=np.float32)
-        if bboxes_array.ndim != 2 or bboxes_array.shape[1] != 4:
-            print(f"Invalid shape for bboxes: {bboxes_array.shape}. Expected (?, 4)")
-            return []
-        
         try:
-            tracked_objects = self.tracker.update(bboxes_array, detection_scores, class_ids)
-        except ValueError as e:
-            print(f"Error updating tracker: {e}")
-            return []
-        
-        # 결과 처리...
-        return tracked_objects
+            # 각도 정보를 제외한 바운딩 박스 리스트 생성
+            bboxes_for_tracking = [bbox[:4] for bbox in bounding_boxes]
+            detection_scores = [1.0] * len(bboxes_for_tracking)
+            class_ids = [0] * len(bboxes_for_tracking)
 
+            # 추적된 객체를 업데이트
+            tracked_objects = self.tracker.update(bboxes_for_tracking, detection_scores, class_ids)
+            tracked_output = []
+
+            # 포함 여부 확인
+            inclusion_flags = self.check_inclusion(tracked_objects, self.prev_tracked_output)
+
+            # 이전에 추적된 출력이 없거나 모든 객체가 새로운 경우
+            if len(self.prev_tracked_output) == 0 or not np.any(inclusion_flags):
+                tracked_output = bounding_boxes
+            else:
+                for i, obj in enumerate(tracked_objects):
+                    if inclusion_flags[i]:
+                        # obj가 이전 결과에 포함되어 있는 경우, 해당 이전 객체를 추가
+                        idx = np.where(inclusion_flags)[0][i]
+                        tracked_output.append(self.prev_tracked_output[idx])
+                    else:
+                        # 새로운 객체인 경우, 원본에서 추가
+                        tracked_output.append(bounding_boxes[i])
+
+            self.prev_tracked_output = copy.deepcopy(tracked_output)
+
+            # print("prev_tracked_output : ", len(self.prev_tracked_output), self.prev_tracked_output)
+            return tracked_output
+
+        except Exception as e:
+            print("tracker error : ", e)
+            
     def remove_ship_body(self, pcd, ship_body_bounds):
         """
         Remove the ship body from the point cloud data.
@@ -373,15 +398,13 @@ class LidarProcessor:
         # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[1.5, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # little bit front for check 
         # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # no obstacle, little bigger than crop roi 
         # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[10, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # front little short
-        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
+        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
         # pcd = self.crop_roi(pcd, start=[-20, -20, -5], end=[20, 20, 5]) # axis - 정면 x, 왼쪽 y, 위 z # test
         
         pcd = self.rotate_point_cloud_by_pitch(pcd)  # 여기에서 포인트 클라우드 회전 적용
         ship_body_bounds = {'min': [-0.925, -0.35, -0.6], 'max': [0.95, 0.35, 0.1]}  # 선체가 위치하는 영역을 지정
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
-       
         pcd = self.voxelization(pcd, voxel_size=self.voxel_size)
-        
         # print("bbox lists ", self.bbox_lists)
         if len(pcd.points) == 0:  # 포인트 클라우드 내 포인트의 수가 0인지 확인
             self.cnt_no_pcd += 1
@@ -397,12 +420,9 @@ class LidarProcessor:
         self.cnt_no_pcd = 0
 
         pcd, labels = self.DBSCAN(pcd, eps=self.dbscan_eps, min_points=int(self.dbscan_minpoints))
-        
         bounding_boxes_o3d = self.compute_bounding_boxes(pcd, labels)
-
-        # tracks = self.do_tracker(bounding_boxes_o3d)
-        self.marking_tracks(bounding_boxes_o3d)
-
+        tracks = self.do_tracker(bounding_boxes_o3d)
+        self.marking_tracks(tracks)
         pc2_msg = self.o3d_to_pointcloud2(pcd)
         self.pub.publish(pc2_msg)
 
