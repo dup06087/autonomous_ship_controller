@@ -10,3 +10,5 @@
 24.03.05_test_code/test_for_ship_detected_prob/pc_data_one_lap.bag
 24.03.05_test_code/test_for_ship_detected_prob/pc_data_rotate_in_place_cut.bag
 24.03.05_test_code/test_for_ship_detected_prob/pc_data_up_and_down_cut.bag
+log_current_value.txt
+log_gnss_raw.txt

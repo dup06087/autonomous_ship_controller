@@ -17,7 +17,6 @@ import math
 import threading
 from std_msgs.msg import ColorRGBA
 from scipy.spatial.transform import Rotation as R
-import cv2
 
 class LidarProcessor:
     def __init__(self):
@@ -72,17 +71,7 @@ class LidarProcessor:
         self.vff_force = vff_force
         
     def voxelization(self, pcd, voxel_size=0.05):
-        voxel_pcd = np.asarray(pcd.points)
-        # print(voxel_pcd)
-        voxel_pcd[:, 2] = 0
-        
-        pcd.points = o3d.utility.Vector3dVector(voxel_pcd)  # 다시 포인트 클라우드로 변환
-        pcd = pcd.voxel_down_sample(voxel_size)
-
-        # Z 값을 0으로 설정
-
-        return pcd
-
+        return pcd.voxel_down_sample(voxel_size)
 
     def crop_roi(self, pcd, start, end):
         min_bound = np.array(start)
@@ -90,21 +79,16 @@ class LidarProcessor:
         roi_bounding_box = o3d.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
         return pcd.crop(roi_bounding_box)
 
-
     def compute_bounding_boxes(self, pcd, labels):
-        bounding_boxes = []
         max_label = labels.max()
+        bounding_boxes = []
         for i in range(max_label + 1):
             point_indices = np.where(labels == i)[0]
-            if len(point_indices) >= 3:  # 최소 3개 이상의 포인트가 필요
-                cluster_points = np.asarray(pcd.points)[point_indices, :2]  # x, y 좌표만 추출
-                cluster_points = cluster_points.astype(np.float32)  # 데이터 타입을 float32로 변환
-                rect = cv2.minAreaRect(cluster_points)
-                # 바운딩 박스의 중심, 너비, 높이, 회전 각도 정보 추출
-                center, size, angle = rect
-                width, height = size
-                bounding_boxes.append([center[0], center[1], width, height, angle])  # angle 추가 가능
-                # bounding_boxes.append([center[0], center[1], width, height])  # angle 추가 가능
+            if len(point_indices) > 0:
+                cluster = pcd.select_by_index(point_indices)
+                bounding_box = cluster.get_axis_aligned_bounding_box()  ### original
+                # bounding_box = cluster.get_oriented_bounding_box() #### rotation
+                bounding_boxes.append(bounding_box)
         return bounding_boxes
 
 
@@ -135,30 +119,21 @@ class LidarProcessor:
         return pc2.create_cloud_xyz32(header, points_xyz)
 
 
-
-    def do_tracker(self, bounding_boxes):
-        # bounding_boxes가 비어 있는 경우 처리
-        if not bounding_boxes:
-            print("bounding_boxes is empty.")
-            return []
-        
-        self.bboxes = [np.array(box).flatten() for box in bounding_boxes]  # 각 바운딩 박스를 1D 배열로 변환
+    def do_tracker(self, bounding_boxes_o3d): # input : (top-left-x, top-left-y, width, height) #### original
+        self.bboxes = [(bbox.min_bound[0], bbox.min_bound[1], bbox.max_bound[0] - bbox.min_bound[0], bbox.max_bound[1] - bbox.min_bound[1]) for bbox in bounding_boxes_o3d]
         detection_scores = [1.0] * len(self.bboxes)
         class_ids = [0] * len(self.bboxes)
-        
-        # self.bboxes를 2D 배열로 변환
-        bboxes_array = np.array(self.bboxes, dtype=np.float32)
-        if bboxes_array.ndim != 2 or bboxes_array.shape[1] != 4:
-            print(f"Invalid shape for bboxes: {bboxes_array.shape}. Expected (?, 4)")
-            return []
-        
-        try:
-            tracked_objects = self.tracker.update(bboxes_array, detection_scores, class_ids)
-        except ValueError as e:
-            print(f"Error updating tracker: {e}")
-            return []
-        
-        # 결과 처리...
+        tracked_objects = self.tracker.update(self.bboxes, detection_scores, class_ids) # return : (frame_id, track_id, bb_left, bb_top, bb_width, bb_height, conf, x, y, z).
+            # 결과를 소수점 8자리까지 반올림
+        self.bbox_lists = [
+            (
+                round(bbox[2], 8),  # x
+                round(bbox[3], 8),  # y
+                round(bbox[4], 8),  # width
+                round(bbox[5], 8)   # height
+            )
+            for bbox in tracked_objects
+        ]
         return tracked_objects
 
     def remove_ship_body(self, pcd, ship_body_bounds):
@@ -226,46 +201,28 @@ class LidarProcessor:
         marker_array.markers.append(delete_marker)
         self.marker_tracker_pub.publish(marker_array)
         
-    def marking_tracks(self, bounding_boxes):
+    def marking_tracks(self, tracks):
         self.delete_all_bbox_markers()
-
+        
         marker_array = MarkerArray()
-        for i, bbox in enumerate(bounding_boxes):
+        for i, track in enumerate(tracks):
             marker = Marker()
             marker.header.frame_id = "velodyne"
             marker.id = i
             marker.type = Marker.CUBE
             marker.action = Marker.ADD
-            marker.lifetime = rospy.Duration(0)
-
-            # 바운딩 박스의 중심과 크기를 사용하여 마커 위치 및 크기 설정
-            marker.pose.position.x = bbox[0]  # center_x
-            marker.pose.position.y = bbox[1]  # center_y
-            marker.pose.position.z = 0  # 지면에 위치
-
-            marker.scale.x = bbox[2]  # width
-            marker.scale.y = bbox[3]  # height
-            marker.scale.z = 0.1  # 높이 (임의의 값)
-
-            # 마커 색상 설정
-            marker.color.r = 0.0
-            marker.color.g = 1.0
-            marker.color.b = 0.0
+            marker.lifetime = rospy.Duration(0)  # 마커가 지속되는 시간을 0초로 설정하여 즉시 사라지도록 설정
+            bb_left, bb_top, bb_width, bb_height = track[2:6]
+            marker.pose.position.x = bb_left + bb_width / 2
+            marker.pose.position.y = bb_top + bb_height / 2
+            marker.pose.position.z = 0
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = bb_width
+            marker.scale.y = bb_height
+            marker.scale.z = 0.1
+            marker.color.r = 1.0
             marker.color.a = 0.5
-
-            # 회전 각도를 쿼터니언으로 변환하여 마커 방향 설정
-            angle = bbox[4]  # 회전 각도
-            # OpenCV는 도(degree) 단위로 각도를 반환하므로 라디안으로 변환
-            angle_rad = np.radians(angle)
-            # Z축 기준으로 회전
-            quat = R.from_euler('z', angle_rad).as_quat()
-            marker.pose.orientation.x = quat[0]
-            marker.pose.orientation.y = quat[1]
-            marker.pose.orientation.z = quat[2]
-            marker.pose.orientation.w = quat[3]
-
             marker_array.markers.append(marker)
-
         self.marker_tracker_pub.publish(marker_array)
 
     def delete_destination_marker(self):
@@ -400,8 +357,8 @@ class LidarProcessor:
         
         bounding_boxes_o3d = self.compute_bounding_boxes(pcd, labels)
 
-        # tracks = self.do_tracker(bounding_boxes_o3d)
-        self.marking_tracks(bounding_boxes_o3d)
+        tracks = self.do_tracker(bounding_boxes_o3d)
+        self.marking_tracks(tracks)
 
         pc2_msg = self.o3d_to_pointcloud2(pcd)
         self.pub.publish(pc2_msg)
