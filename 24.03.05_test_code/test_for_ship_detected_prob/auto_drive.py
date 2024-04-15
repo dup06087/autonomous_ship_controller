@@ -167,7 +167,8 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         if angle_diff > 180:
             angle_diff -= 360
         elif angle_diff < -180:
-            angle_diff += 360
+            pass
+            # angle_diff += 360
 
         self.throttle_component = self.distance_to_target * math.cos(math.radians(angle_diff))
         self.roll_component = self.distance_to_target * math.sin(math.radians(angle_diff))
@@ -178,10 +179,10 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         # Kd = 0.318
 
         Uf = Kf * self.throttle_component
-        Uf = max(1550 - 1500, min(Uf, 1750 - 1500))
+        Uf = max(1575 - 1500, min(Uf, 1750 - 1500))
 
         Ud = Kd * self.roll_component
-        max_diff = 800 * 0.125
+        max_diff = 200
         Ud = max(-max_diff, min(Ud, max_diff))
 
         PWM_right = 1500 + Uf - Ud
@@ -271,7 +272,7 @@ def calculate_vff_force(self, obstacles):
     
     
     
-    self.lidar_processor.publish_destination_marker(self.throttle_component, -self.roll_component, 0.0)
+    # self.lidar_processor.publish_destination_marker(self.throttle_component, -self.roll_component, 0.0)
 
     # repulsive force test
     # self.vff_force = total_repulsive_force.tolist()

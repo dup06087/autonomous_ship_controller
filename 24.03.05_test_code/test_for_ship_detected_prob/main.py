@@ -8,6 +8,7 @@ from Jetson_lidar_execution import LidarProcessor
 from auto_drive import auto_drive
 
 import copy
+from math import radians, cos, sin, asin, sqrt, atan2, degrees
 
 class boat:
     def __init__(self):
@@ -32,7 +33,57 @@ class boat:
 
         self.gnss_lock = threading.Lock()
 
+
         # self.obstacle_coordinates = None
+
+
+    def haversine(self, lon1, lat1, lon2, lat2):
+        """
+        Calculate the great circle distance in meters between two points 
+        on the earth (specified in decimal degrees)
+        """
+        # Convert decimal degrees to radians 
+        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+
+        # Haversine formula 
+        dlon = lon2 - lon1 
+        dlat = lat2 - lat1 
+        a = sin(dlat/2)**2 + cos(lat1) * cos(lat2) * sin(dlon/2)**2
+        c = 2 * asin(sqrt(a)) 
+        r = 6371000 # Radius of earth in meters. Use 3956 for miles
+        return c * r
+
+    def calculate_bearing(self, lon1, lat1, lon2, lat2):
+        """
+        Calculate the bearing between two points on the earth
+        """
+        lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
+        dlon = lon2 - lon1
+        x = sin(dlon) * cos(lat2)
+        y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon)
+        initial_bearing = atan2(x, y)
+        # Now we have the initial bearing but math.atan2 return values from -π to +π (−180° to +180°)
+        # So we normalize the result by converting it to a compass bearing from 0° to 360°
+        initial_bearing = degrees(initial_bearing)
+        bearing = (initial_bearing + 360) % 360
+        return bearing
+
+    def coordinate_transform(self, distance, bearing, heading):
+        """
+        Transform the target point relative to the ship's current heading
+        """
+        # Convert heading and bearing to radians for calculation
+        heading_rad = radians(heading)
+        bearing_rad = radians(bearing)
+        
+        # Calculate relative angle
+        relative_angle = bearing_rad - heading_rad
+        
+        # Transform to x, y coordinates
+        x = distance * cos(relative_angle)
+        y = distance * sin(relative_angle)
+        
+        return x, y
 
     def gnss_thread(self):
         self.serial_gnss_cpy = None
@@ -40,8 +91,8 @@ class boat:
 
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
-            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/6", self.gnss_lock, 1)
+            self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
+            # self.serial_gnss_cpy = serial_gnss("/dev/pts/3", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -73,7 +124,27 @@ class boat:
             self.collecting_data_thread.start()
         except Exception as e:
             print("collect data init error : ", e)
-        
+    
+    def update_rviz_dest_point(self):
+        try:
+            if self.current_value['mode_pc_command'] == "AUTO":
+                dest_latitude = self.current_value['dest_latitude'][self.current_value["cnt_destination"]]
+                dest_longitude = self.current_value['dest_longitude'][self.current_value["cnt_destination"]]
+                current_latitude = self.current_value['latitude']
+                current_longitude = self.current_value['longitude']
+                heading = self.current_value['heading']
+                distance = self.haversine(current_longitude, current_latitude, dest_longitude, dest_latitude)
+                bearing = self.calculate_bearing(current_longitude, current_latitude, dest_longitude, dest_latitude)
+
+                # Perform coordinate transformation
+                x, y = self.coordinate_transform(distance, bearing, heading)
+                self.lidar_processor.publish_destination_marker(x, -y, 0)
+            else:
+                self.lidar_processor.delete_destination_marker()
+        except Exception as e:
+            pass
+            # print("update rviz destination marker error (maybe some of values are None) : ", e)
+    
     def collect_data(self):
         try:    
             # print("collecting")
@@ -83,8 +154,8 @@ class boat:
                     self.update_pc_coeff,
                     self.update_jetson_coeff,
                     self.update_vff_coeff,
-                    self.update_gnss_data
-
+                    self.update_gnss_data,
+                    self.update_rviz_dest_point
             ]
             prev_time_collect_data = time.time()
             while True:
@@ -107,8 +178,6 @@ class boat:
                     file.write(f"{self.log_time} : {self.current_value}\n")
                         
                 time.sleep(0.2)
-                
-                
                 
         except Exception as e:
             print("data collecting error : ", e)
@@ -139,13 +208,13 @@ class boat:
         except Exception as e:
             pass        
 
-
     def update_pc_command(self):
         current_pc_command = self.jetson_socket_pc.pc_command
         if current_pc_command != self.prev_pc_command:
             self.current_value.update(current_pc_command)
             self.prev_pc_command = copy.deepcopy(current_pc_command)
-    
+
+                
     def update_pc_coeff(self):
         current_pc_coeff = self.jetson_socket_pc.pc_coeff
         if current_pc_coeff != self.prev_pc_coeff:
@@ -179,8 +248,6 @@ class boat:
         # print("flag1 : ", flag_devices, ", flag_data : ", flag_data, ", flag_autodrive : ", flag_autodrive)
         flag_output = [self.flag_autodrive, flag_data[1], flag_data[2], flag_data[3], flag_data[4], flag_data[5]]
         
-        
-        
         return flag_output
         # [ready or not(bool), lat, lon, dest_lat, dest_lon, heading]
 
@@ -205,8 +272,7 @@ class boat:
 
     def flag_devices(self):
         flags = self.jetson_socket_pc.flag_socket_pc, self.lidar_processor.flag_lidar, self.serial_nucleo_cpy.flag_nucleo_alive, self.serial_gnss_cpy.flag_gnss
-        # print("flags : ", flags)
-        
+        # print("flags : ", flags)    
         return flags
     
     def data_check_all_device(self):

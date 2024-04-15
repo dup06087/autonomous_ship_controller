@@ -313,9 +313,9 @@ class LidarProcessor:
         marker.pose.orientation.y = 0.0
         marker.pose.orientation.z = 0.0
         marker.pose.orientation.w = 1.0
-        marker.scale.x = 0.5  # 크기 조정
-        marker.scale.y = 0.5
-        marker.scale.z = 0.5
+        marker.scale.x = 1  # 크기 조정
+        marker.scale.y = 1
+        marker.scale.z = 1
         marker.color = ColorRGBA(0.0, 1.0, 0.0, 1.0)  # 초록색
         
         
@@ -396,9 +396,9 @@ class LidarProcessor:
         # pcd = self.rotate_point_cloud_by_z(pcd)
 
         # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[1.5, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # little bit front for check 
-        # pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # no obstacle, little bigger than crop roi 
+        pcd = self.crop_roi(pcd, start=[-0.924, -0.36, -0.7], end=[0.96, 0.36, 0.2]) # axis - 정면 x, 왼쪽 y, 위 z # no obstacle, little bigger than crop roi 
         # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[10, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # front little short
-        pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
+        # pcd = self.crop_roi(pcd, start=[-1, -5, -0.5], end=[20, 5, 0.5]) # axis - 정면 x, 왼쪽 y, 위 z # original
         # pcd = self.crop_roi(pcd, start=[-20, -20, -5], end=[20, 20, 5]) # axis - 정면 x, 왼쪽 y, 위 z # test
         
         pcd = self.rotate_point_cloud_by_pitch(pcd)  # 여기에서 포인트 클라우드 회전 적용
@@ -426,8 +426,8 @@ class LidarProcessor:
         pc2_msg = self.o3d_to_pointcloud2(pcd)
         self.pub.publish(pc2_msg)
 
-        # self.bbox_lists = [bbox[2:6] for bbox in tracks]
-        # print("bbox lists ", self.bbox_lists)
+        self.bbox_lists = tracks
+        print("bbox lists ", self.bbox_lists)
         # self.calculate_vff_force(self.bbox_lists)
         
         self.lidar_processing_time = time.time() - time_

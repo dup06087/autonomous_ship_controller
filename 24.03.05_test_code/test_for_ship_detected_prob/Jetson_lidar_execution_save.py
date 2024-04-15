@@ -86,8 +86,8 @@ class LidarProcessor:
             point_indices = np.where(labels == i)[0]
             if len(point_indices) > 0:
                 cluster = pcd.select_by_index(point_indices)
-                bounding_box = cluster.get_axis_aligned_bounding_box()  ### original
-                # bounding_box = cluster.get_oriented_bounding_box() #### rotation
+                # bounding_box = cluster.get_axis_aligned_bounding_box()  ### original
+                bounding_box = cluster.get_oriented_bounding_box() #### rotation
                 bounding_boxes.append(bounding_box)
         return bounding_boxes
 
@@ -245,9 +245,9 @@ class LidarProcessor:
         marker.pose.orientation.y = 0.0
         marker.pose.orientation.z = 0.0
         marker.pose.orientation.w = 1.0
-        marker.scale.x = 0.5  # 크기 조정
-        marker.scale.y = 0.5
-        marker.scale.z = 0.5
+        marker.scale.x = 5  # 크기 조정
+        marker.scale.y = 5
+        marker.scale.z = 5
         marker.color = ColorRGBA(0.0, 1.0, 0.0, 1.0)  # 초록색
         
         

@@ -13,3 +13,6 @@
 log_current_value.txt
 log_gnss_raw.txt
 log_pwm_raw_return.txt
+log_flag_stop.txt
+log_pwm.txt
+pcd_to_slam_map/combined_pcd.ply

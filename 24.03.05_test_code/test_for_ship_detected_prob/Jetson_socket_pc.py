@@ -33,8 +33,12 @@ class Server_pc:
                 try:
                     received_dict = json.loads(data.decode('utf-8'))
                     self.pc_command.update(received_dict)
+
+                    
                     self.flag_socket_pc[0] = True
                     receive_socket.sendall("ack".encode())  # Acknowledgment 메시지 보내기
+                    
+                    
 
                 except (json.JSONDecodeError, TypeError, ValueError) as e:
                     current_time = time.time()
@@ -61,7 +65,7 @@ class Server_pc:
                 data = receive_socket.recv(1024).strip()
                 # print("data : ", data)
                 if not data:
-                    print("coeff receiveno data : thread end")
+                    print("coeff receive no data : thread end")
                     self.flag_socket_pc[3] = False
                     break
                     
@@ -194,7 +198,6 @@ class Server_pc:
                             continue
 
                     while True:
-                        print("stuck in where6")
                         try:
                             send_client, _ = send_socket.accept()
                             print("Accepted send connection")
@@ -230,9 +233,10 @@ class Server_pc:
                                     
                     while all(self.flag_socket_pc):
                         print("pc communicating well")
-                        time.sleep(5)
+                        time.sleep(10)
                         
                     print("thread end regenerating")
+                    self.flag_run_thread = False                    
                     receive_socket.close()
                     receive_coeff_socket.close()
                     send_socket.close()
@@ -240,6 +244,8 @@ class Server_pc:
                     # self.flag_run_thread = False 
                     self.flag_socket_pc = [False, False, False, False] 
                     self.flag_socket_init_cycle = [False, False, False, False] 
+                    
+                    time.sleep(2)
                     
             except Exception as e:
                 print("socket thread error : ",e)

@@ -200,11 +200,11 @@ class serial_gnss:
             new_lon = round(lon_deg + lon_min / 60, 8)
 
             # LPF 적용
-            filtered_lat = self.apply_low_pass_filter('latitude', new_lat)
-            filtered_lon = self.apply_low_pass_filter('longitude', new_lon)
+            # filtered_lat = self.apply_low_pass_filter('latitude', new_lat)
+            # filtered_lon = self.apply_low_pass_filter('longitude', new_lon)
 
-            self.current_value['latitude'] = round(filtered_lat, 8)
-            self.current_value['longitude'] = round(filtered_lon, 8)
+            self.current_value['latitude'] = round(new_lat, 8)
+            self.current_value['longitude'] = round(new_lon, 8)
 
             self.current_value['velocity'] = float(tokens[7])
             self.cnt_receive = 0
@@ -221,11 +221,11 @@ class serial_gnss:
             new_pitch = float(tokens[6])
 
             # LPF 적용
-            filtered_heading = self.apply_low_pass_filter('heading', new_heading)
-            filtered_pitch = self.apply_low_pass_filter('pitch', new_pitch)
+            # filtered_heading = self.apply_low_pass_filter('heading', new_heading)
+            # filtered_pitch = self.apply_low_pass_filter('pitch', new_pitch)
 
-            self.current_value['heading'] = round(filtered_heading, 1)
-            self.current_value['pitch'] = round(filtered_pitch, 1)
+            self.current_value['heading'] = round(new_heading, 1)
+            self.current_value['pitch'] = round(new_pitch, 1)
 
             self.flag_gnss = True
             self.cnt_process = 0
