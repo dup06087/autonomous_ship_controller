@@ -6,12 +6,14 @@ import sensor_msgs.point_cloud2 as pc2
 from ros_numpy import point_cloud2 as ros_np
 import open3d as o3d
 import time 
+
 class PointCloudProcessor:
     def __init__(self):
-        rospy.init_node("pointcloud_processor", anonymous=True)
+        # rospy.init_node("pointcloud_processor", anonymous=True)
         self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback)
         self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=10)
-
+        self.bbox_lists = []
+        
     def voxel_down_sampling(self, pcd, voxel_size):
         return pcd.voxel_down_sample(voxel_size)
 
@@ -20,6 +22,15 @@ class PointCloudProcessor:
         filtered_pcd, ind = pcd.remove_radius_outlier(nb_points, radius)
         return filtered_pcd, ind
 
+    def update_coeff(self, coeff_kf, coeff_kd, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
+        self.coeff_kf = coeff_kf
+        self.coeff_kd = coeff_kd
+        self.voxel_size = voxel_size
+        self.intensity = intensity
+        self.dbscan_eps= dbscan_eps
+        self.dbscan_minpoints = dbscan_minpoints
+        self.vff_force = vff_force
+        
     def remove_ship_body(self, pcd, ship_body_bounds):
         """
         Remove the ship body from the point cloud data.
@@ -57,21 +68,22 @@ class PointCloudProcessor:
         pcd.points = o3d.utility.Vector3dVector(np.column_stack((pc_array['x'], pc_array['y'], pc_array['z'])))
 
         # start=[-0.924, -0.36, -0.7]; end=[0.96, 0.36, 0.2] # no obstacle, little bigger than crop roi 
-        start=[-1, -5, -0.5]; end=[20, 5, 0.5] # original
+        # start=[-1, -5, -0.5]; end=[20, 5, 0.5] # original
+        start=[-100, -100, -0.7]; end=[100, 100, 0.5] 
         
         min_bound = np.array(start)
         max_bound = np.array(end)
         roi_bounding_box = o3d.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
         pcd = pcd.crop(roi_bounding_box)
 
-        ship_body_bounds = {'min': [-0.925, -0.35, -0.6], 'max': [0.95, 0.35, 0.1]}  # 선체가 위치하는 영역을 지정
+        ship_body_bounds = {'min': [-1, -0.4, -0.6], 'max': [1, 0.4, 0.1]}  # 선체가 위치하는 영역을 지정
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
         
         # Voxel down-sampling
         pcd = self.voxel_down_sampling(pcd, voxel_size=0.05)
 
         # Radius outlier removal
-        pcd, ind = self.radius_outlier_removal(pcd, nb_points=15, radius=0.5)
+        pcd, ind = self.radius_outlier_removal(pcd, nb_points=10, radius=0.7)
         if len(pcd.points) == 0:
             rospy.logwarn("No points left after filtering")
             return
@@ -91,11 +103,14 @@ class PointCloudProcessor:
         # processed_msg = ros_np.array_to_pointcloud2(points, header)
 
         self.pub.publish(points_xyz)
-        print("spinning")
 
     def run(self):
         rospy.spin()
 
 if __name__ == "__main__":
+    rospy.init_node("pointcloud_processor", anonymous=True)
+
     processor = PointCloudProcessor()
+
     processor.run()
+

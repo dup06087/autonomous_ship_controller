@@ -6,26 +6,15 @@ import serial
 import threading
 import sys  # sys 모듈 추가
 
-
-
-# GPS 데이터 파일 경로
-
-# 최소 3개의 인자가 필요합니다: 스크립트 이름, 파일 이름, 또 다른 변수
-if len(sys.argv) < 3:
-    print("Usage: python3 script.py <gps_data_file> <another_variable>")
-    sys.exit(1)
-
-# 명령줄 인자로부터 파일 이름과 다른 변수를 받습니다.
-gps_data_file = sys.argv[1]
-port_number = sys.argv[2]
+gps_data_file = "./24.04.09_one_lap.txt"
 
 # 시리얼 포트 설정
-port = "/dev/pts/{}".format(port_number)  # 실제 사용하는 포트 번호로 변경해주세요.
+port = "/dev/pts/4"  # 실제 사용하는 포트 번호로 변경해주세요.
 baudrate = 115200
 ser = serial.Serial(port, baudrate)
 
 # 콜백 실행 중 플래그 및 마지막 처리 초
-callback_in_progress = False
+callback_in_progress = True
 last_processed_second = None
 lock = threading.Lock()
 
@@ -65,12 +54,13 @@ def clock_callback(msg):
     try:
         current_time = datetime_from_rospy_time(msg.clock)
         current_second = current_time.strftime("%H%M%S")  # HHMMSS 형식
-    
         # 초가 변경되었는지 확인
         if current_second != last_processed_second:
+            print("doing~")
             last_processed_second = current_second
             gnss_time_format = current_second  # 시간 형식에 맞춤
             find_and_send_gnss_logs(gnss_time_format, gps_data_file)
+            
     finally:
         with lock:
             callback_in_progress = False  # 콜백 실행 완료를 표시
@@ -78,7 +68,9 @@ def clock_callback(msg):
 def listen_to_clock_and_send_gnss():
     rospy.init_node('gnss_serial_sender', anonymous=True)
     rospy.Subscriber("/clock", Clock, clock_callback)
+    print("spinning")
     rospy.spin()
+    
 
 if __name__ == '__main__':
     try:

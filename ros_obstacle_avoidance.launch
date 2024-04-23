@@ -1,0 +1,12 @@
+<launch>
+
+    <!-- Velodyne Pointcloud Node -->
+    <include file="$(find velodyne_pointcloud)/launch/VLP16_points.launch"/>
+
+    <!-- DWA -->
+    <include file="$(find ros_dwa)/launch/dwa_launch.launch"/>
+
+    <!-- rviz -->
+    <node name="rviz_config" pkg="rviz" type="rviz" args="-d $(find ros_dwa)/config/rviz_settings.rviz"/>
+
+</launch>

@@ -10,7 +10,8 @@ baudrate = 115200
 
 # 파일 경로 설정
 # gps_data_file = './extracted_hrp_rmc.txt'  # python3로 실행시
-gps_data_file = './24.03.05_test_code/gps_transmitter/gps_data.txt'  # sh 실행시
+# gps_data_file = './24.04.15_for_dwa/gps_transmitter/gps_data.txt' # sh 실행시
+gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_stay_start_point.txt' # sh 실행시
 
 # 시리얼 포트 초기화
 ser = serial.Serial(port, baudrate)

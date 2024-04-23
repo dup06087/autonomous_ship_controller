@@ -1,54 +1,115 @@
 import rospy
-import utm
-from math import radians, cos, sin
-from geometry_msgs.msg import PoseStamped, Quaternion
+import threading
+from actionlib import SimpleActionClient
+from move_base_msgs.msg import MoveBaseAction
+from actionlib_msgs.msg import GoalID
+from geometry_msgs.msg import PoseStamped
+from std_srvs.srv import Empty
+import math
 
-def heading_to_quaternion(heading):
-    heading_rad = radians(heading)
-    w = cos(heading_rad / 2.0)
-    x = 0.0
-    y = 0.0
-    z = sin(heading_rad / 2.0)
-    return Quaternion(x=x, y=y, z=z, w=w)
+class NavigationController:
+    def __init__(self, boat_instance):
+        self.boat = boat_instance
+        self.client = SimpleActionClient('move_base', MoveBaseAction)
+        self.pub_goal = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
+        self.pub_cancel = rospy.Publisher('/move_base/cancel', GoalID, queue_size=10)
+        self.clear_costmaps_service = rospy.ServiceProxy('/move_base/clear_costmaps', Empty)
+        self.current_lat = 0.0
+        self.current_lon = 0.0
+        self.goal_lat = 0.0
+        self.goal_lon = 0.0
+        self.heading = 0.0
+        self.frame_id = 'map'
+        
+        # Set up the timer to clear costmaps independently of navigation commands
+        rospy.Timer(rospy.Duration(5), self.clear_costmaps_callback)  # Clears costmaps every 5 seconds
 
-def get_relative_position(lat1, lon1, lat2, lon2):
-    # 첫 번째 위치(로봇의 현재 위치)를 UTM으로 변환
-    x1, y1, _, _ = utm.from_latlon(lat1, lon1)
-    # 두 번째 위치(목적지)를 UTM으로 변환
-    x2, y2, _, _ = utm.from_latlon(lat2, lon2)
-    # 두 위치의 차이 계산
-    dx = x2 - x1
-    dy = y2 - y1
-    return dx, dy
+    def publish_nav_goal(self):
+        self.client.wait_for_server()
+        
+        while not rospy.is_shutdown():  # 외부 루프
+            try:
+                if self.boat.current_value['flag_autodrive']:
+                    # print("goal publsihing")
+                    try:
+                        lat = self.boat.current_value['latitude']
+                        lon = self.boat.current_value['longitude']
+                        dest_lat = self.boat.current_value['dest_latitude'][self.boat.current_value["cnt_destination"]]
+                        dest_lon = self.boat.current_value['dest_longitude'][self.boat.current_value["cnt_destination"]]
+                        heading = self.boat.current_value['heading']
+                    except Exception as e:
+                        print("variable error : ", e)
+                        
+                        
+                    try:
+                        dx, dy = self.get_relative_position(lat, lon, dest_lat, dest_lon, heading)
+                        quaternion = self.heading_to_quaternion(heading)
+                        goal = PoseStamped()
+                        goal.header.stamp = rospy.Time.now()
+                        goal.header.frame_id = self.frame_id
+                        goal.pose.position.x = dx
+                        goal.pose.position.y = dy
+                        goal.pose.orientation.x = quaternion[0]
+                        goal.pose.orientation.y = quaternion[1]
+                        goal.pose.orientation.z = quaternion[2]
+                        goal.pose.orientation.w = quaternion[3]
+                    except Exception as e:
+                        print("pose error : ", e)
+                        
+                    self.pub_goal.publish(goal)
+                    print("Goal published: Position - ({}, {}), Orientation - {}".format(dx, dy, quaternion))
+                    rospy.sleep(1)
+                    
+                else:
+                    print("navigation else")
+                    self.cancel_all_goals()
+                    rospy.sleep(1)  # 중지 상태에서는 1초마다 확인
+                    
+            except Exception as e:
+                pass
+                # print("pub nav goal thread error : ", e)
+                
+    def cancel_all_goals(self):
+        cancel_msg = GoalID()
+        self.client.cancel_goal()
+        self.pub_cancel.publish(cancel_msg)
+        print("All goals canceled.")
 
-def publish_nav_goal(current_lat, current_lon, goal_lat, goal_lon, heading, frame_id='map'):
-    rospy.init_node('nav_goal_publisher')
-    pub = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
-    rate = rospy.Rate(1)  # 초당 1회 발행
+    def clear_costmaps_callback(self, event):
+        try:
+            self.clear_costmaps_service()
+            rospy.loginfo("Costmaps cleared successfully.")
+        except rospy.ServiceException as e:
+            rospy.logerr("Service call failed: %s", e)
 
-    while not rospy.is_shutdown():
-        # 현재 위치를 기준으로 목적지의 상대 위치 계산
-        dx, dy = get_relative_position(current_lat, current_lon, goal_lat, goal_lon)
+    def heading_to_quaternion(self, heading):
+        cy = math.cos(heading * 0.5)
+        sy = math.sin(heading * 0.5)
+        return (0, 0, sy, cy)
 
-        # 헤딩을 쿼터니언으로 변환
-        quaternion = heading_to_quaternion(heading)
+    def get_relative_position(self, current_lat, current_lon, goal_lat, goal_lon, heading):
+        R = 6371000  # 지구 반경 (미터 단위)
+        phi1 = math.radians(current_lat)
+        phi2 = math.radians(goal_lat)
+        delta_phi = math.radians(goal_lat - current_lat)
+        delta_lambda = math.radians(goal_lon - current_lon)
 
-        # PoseStamped 메시지 생성
-        goal = PoseStamped()
-        goal.header.stamp = rospy.Time.now()
-        goal.header.frame_id = frame_id
-        goal.pose.position.x = dx
-        goal.pose.position.y = dy
-        goal.pose.orientation = quaternion
+        a = math.sin(delta_phi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda/2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        distance = R * c
 
-        # 목적지 발행
-        pub.publish(goal)
-        print("publishing")
-        rate.sleep()
+        y = math.sin(delta_lambda) * math.cos(phi2)
+        x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
+        bearing = math.atan2(y, x)
+
+        adjusted_bearing = bearing - heading + math.pi/2  # 시계 방향으로 90도 더 회전
+        dx = distance * math.sin(adjusted_bearing)
+        dy = distance * math.cos(adjusted_bearing)
+
+        return dx, dy
+
+
 
 if __name__ == '__main__':
-    try:
-        # 현재 위치와 목적지 예시
-        publish_nav_goal(34.134556, -117.5432144, 34.134568, -117.5432148, 270)
-    except rospy.ROSInterruptException:
-        pass
+    boat_instance = None  # Replace with actual instance if necessary
+    nav_controller = NavigationController(boat_instance)

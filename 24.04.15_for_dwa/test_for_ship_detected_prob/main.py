@@ -3,9 +3,10 @@ from Jetson_initalizing_values import initialize_variables
 from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
-from Jetson_lidar_execution import LidarProcessor
+from Jetson_lidar_execution import PointCloudProcessor
 
 from auto_drive import auto_drive
+from goal_publish import NavigationController
 
 import copy
 from math import radians, cos, sin, asin, sqrt, atan2, degrees
@@ -91,8 +92,8 @@ class boat:
 
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
-            self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            # self.serial_gnss_cpy = serial_gnss("/dev/pts/3", self.gnss_lock, 1)
+            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/3", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -144,7 +145,25 @@ class boat:
         except Exception as e:
             pass
             # print("update rviz destination marker error (maybe some of values are None) : ", e)
+
     
+    def update_waypoint(self, data):
+        try:
+            print("local planning data : ", data)
+            if data.poses:
+                last_pose = data.poses[-1]
+                self.current_value["waypoint_latitude"] = round(float(last_pose.pose.position.x), 2)
+                self.current_value["waypoint_longitude"] = round(float(last_pose.pose.position.y), 2)
+                print(f"Updated waypoint: Latitude = {self.current_value['waypoint_latitude']}, Longitude = {self.current_value['waypoint_longitude']}")
+        except Exception as e:
+            print("Error in update_waypoint: ", e)
+
+
+        # # 웨이포인트 업데이트 (PoseStamped 메시지에서 경도와 위도 추출)
+        # self.current_value["waypoint_latitude"] = data.pose.position.x
+        # self.current_value["waypoint_longitude"] = data.pose.position.y
+        # # PWM 계산을 바로 호출할 수 있습니다.
+
     def collect_data(self):
         try:    
             # print("collecting")
@@ -152,8 +171,8 @@ class boat:
             tasks = [lambda : self.update_seperate_data(), 
                     self.update_pc_command,
                     self.update_pc_coeff,
-                    self.update_jetson_coeff,
-                    self.update_vff_coeff,
+                    # self.update_jetson_coeff,
+                    # self.update_vff_coeff,
                     self.update_gnss_data,
                     self.update_rviz_dest_point
             ]
@@ -271,7 +290,7 @@ class boat:
         return True
 
     def flag_devices(self):
-        flags = self.jetson_socket_pc.flag_socket_pc, self.lidar_processor.flag_lidar, self.serial_nucleo_cpy.flag_nucleo_alive, self.serial_gnss_cpy.flag_gnss
+        flags = self.jetson_socket_pc.flag_socket_pc, self.serial_nucleo_cpy.flag_nucleo_alive, self.serial_gnss_cpy.flag_gnss
         # print("flags : ", flags)    
         return flags
     
@@ -300,20 +319,27 @@ class boat:
             print("auto_driving error : ", e)
 
     def lidar_thread(self):
-        self.lidar_processor = LidarProcessor()
+        self.lidar_processor = PointCloudProcessor()
         self.lidar_processor_thread = threading.Thread(target = self.lidar_processor.run)
         self.lidar_processor_thread.start()
         # lidar_processor.bbox_lists
+    
+    def goal_publishing_thread(self):
+        self.goal_controller = NavigationController(self)
+        self.goal_controller_thread = threading.Thread(target = self.goal_controller.publish_nav_goal)
+        self.goal_controller_thread.start()
+        print("goal_controller started")
         
     def thread_start(self):
         prev_pc_command = None
-        
         self.lidar_thread()
         self.gnss_thread()
         self.nucleo_thread()
-       
         self.collect_data_thread()
         self.pc_socket_thread()
+        
+        self.goal_publishing_thread()
+        
         self.auto_driving() # block in while
         
         time_prev = 0

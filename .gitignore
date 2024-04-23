@@ -33,3 +33,5 @@ auto_drive_without_obstacle/gps_transmitter/gps_data.txt
 24.04.15_for_dwa/gps_transmitter/gps_data.txt
 24.04.15_for_dwa/gps_transmitter/log_for_test (5).nma
 24.04.15_for_dwa/test_for_ship_detected_prob/pc_data_move_around.bag
+24.04.15_for_dwa/gps_extract_from_log/24.04.09_one_lap.txt
+24.04.15_for_dwa/gps_transmitter/24.04.09_auto_one_lap.txt
