@@ -31,7 +31,9 @@ def auto_drive(self):
     self.waypoint_longitude = 0.0
 
     # 웨이포인트를 받기 위한 구독자 설정 (토픽 이름과 메시지 유형은 예시일 뿐 실제 프로젝트에서 확인 필요)
-    rospy.Subscriber("/move_base/DWAPlannerROS/local_plan", Path, self.update_waypoint)
+    # rospy.Subscriber("/move_base/DWAPlannerROS/local_plan", Path, self.update_local_waypoint)
+    rospy.Subscriber("/move_base/DWAPlannerROS/global_plan", Path, self.update_global_waypoint)
+
     last_print_time = time.time()  # 占쏙옙占쏙옙占쏙옙占쏙옙占쏙옙 占쏙옙占쏙옙占?占시곤옙 占십깍옙화
 
     distance_x = None
@@ -57,19 +59,16 @@ def auto_drive(self):
 
                 flag_arrived = False
                 
-            # flag_ready_to_auto_drive, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading = self.flag_check_for_autodrive()
+            flag_ready_to_auto_drive, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading = self.flag_check_for_autodrive()
             
             """ simulation
             flag_ready_to_auto_drive = True
             current_latitude, current_longitude, destination_latitude, destination_longitude
-            
             """
-            flag_ready_to_auto_drive = True
-            self.current_value["flag_autodrive"] = True
-            
             
             current_latitude, current_longitude, destination_latitude, destination_longitude = self.current_value["latitude"], self.current_value["longitude"], self.current_value["dest_latitude"], self.current_value["dest_longitude"]
             current_heading = self.current_value["heading"]
+            
             if destination_latitude != prev_destination_latitude or destination_longitude != prev_destination_longitude: # arrived, new_destination_arrived
                 self.cnt_destination = 0
                 self.current_value["cnt_destination"] = self.cnt_destination
@@ -82,7 +81,8 @@ def auto_drive(self):
                 # if counter_dead_autodrive >= 5: # time sleep 0.2s * 5
                 self.current_value["pwml_auto"] = 1500
                 self.current_value["pwmr_auto"] = 1500
-                
+                self.current_value["waypoint_lat_m"] = None
+                self.current_value["waypoint_lon_m"] = None
                 if self.current_value["mode_pc_command"] == "AUTO":
                     with open('log_flag_stop.txt', 'a') as file:
                         file.write(f"{self.log_time} : {self.autodrive_output_flag}\n")
@@ -100,18 +100,22 @@ def auto_drive(self):
                 counter_dead_autodrive = 0
                 base_lat = current_latitude
                 base_lon = current_longitude
-                if self.current_value["waypoint_latitude"] == None or self.current_value["waypoint_longitude"] == None:    
+                if self.current_value["waypoint_lat_m"] == None or self.current_value["waypoint_lon_m"] == None:    
                     self.current_value["pwml_auto"] = 1500
                     self.current_value["pwmr_auto"] = 1500
                     continue
-                
-                print("coordinate : ", distance_x, distance_y)
+                else:
+                    distance_x = self.current_value["waypoint_lat_m"]
+                    distance_y = self.current_value["waypoint_lon_m"]
+                    
                 current_heading = self.current_value["heading"]
                 target_lat, target_lon = convert_metric_to_latlon(base_lat, base_lon, distance_x, distance_y, current_heading) # target : 위경도
-                print("target : ", target_lat, target_lon)
-                print("current_heading : ", current_heading)
+                adjusted_target_lat, adjusted_target_lon = adjust_gps_position(target_lat, target_lon, current_heading)
+                
+                self.current_value["waypoint_latitude"] = adjusted_target_lat
+                self.current_value["waypoint_longitude"] = adjusted_target_lon
 
-                calculate_pwm_auto(self, current_latitude, current_longitude, float(target_lat), float(target_lon), current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
+                calculate_pwm_auto(self, current_latitude, current_longitude, float(adjusted_target_lat), float(adjusted_target_lon), current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
                 
                 t = time.localtime()    
                 log_time = time.strftime("%H:%M:%S", t)
@@ -120,7 +124,7 @@ def auto_drive(self):
                     file.write("{} : {},{}\n".format(log_time, self.current_value["pwml_auto"], self.current_value["pwmr_auto"]))
                 
                 ''' self.distance_to_target 값 none 아닌지 확인하는 코드 추가'''
-                if float(self.distance_to_target) <= 3:
+                if float(self.distance_to_target) <= 1:
                     # print("where is the prob2")
                     self.cnt_destination += 1
                     self.current_value['cnt_destination'] = self.cnt_destination
@@ -139,7 +143,10 @@ def auto_drive(self):
                         self.current_value['mode_pc_command'] = "SELF"
                         self.current_value["dest_latitude"] = None
                         self.current_value["dest_longitude"] = None
-
+                        
+                        self.current_value["waypoint_latitude"] = None
+                        self.current_value["waypoint_longitude"] = None
+                        
                         print("Arrived")
                         flag_ready_to_auto_drive = False
                         flag_arrived = True
@@ -176,14 +183,13 @@ def convert_metric_to_latlon(base_lat, base_lon, distance_x, distance_y, current
     geod = Geodesic.WGS84
 
     # 현재 헤딩을 기반으로 X, Y 거리를 방위각으로 변환
-    azimuth = (math.degrees(math.atan2(distance_y, distance_x)) + current_heading) % 360
+    azimuth = (math.degrees(math.atan2(-distance_y, distance_x)) + current_heading) % 360
     
     # 거리를 계산 (피타고라스의 정리)
     distance = math.sqrt(distance_x**2 + distance_y**2)
     
     # base 위치에서 해당 방위각과 거리로 이동했을 때의 위치 계산
     result = geod.Direct(base_lat, base_lon, azimuth, distance)
-    print("lat, lon : ", result['lat2'], result['lon2'])
     # 계산된 목표 위치의 위경도 반환
     return (result['lat2'], result['lon2'])
 
@@ -219,18 +225,48 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         Uf = max(1575 - 1500, min(Uf, 1750 - 1500))
 
         Ud = Kd * self.roll_component
-        max_diff = 200
+        max_diff = 300
         Ud = max(-max_diff, min(Ud, max_diff))
 
         PWM_right = 1500 + Uf - Ud
         PWM_left = 1500 + Uf + Ud
+
+        PWM_right = max(1250, min(1750, PWM_right))
+        PWM_left = max(1250, min(1750, PWM_left))
 
         self.current_value["pwml_auto"] = int(PWM_left)
         self.current_value["pwmr_auto"] = int(PWM_right)
         
     except Exception as e:
         print("error pwm : ", e)
-        
+
+def adjust_gps_position(lat, lon, heading, offset=0.6):
+    """
+    Adjust the GPS position to account for an offset due to sensor placement.
+    
+    :param lat: Latitude of the robot's GPS position
+    :param lon: Longitude of the robot's GPS position
+    :param heading: Current heading of the robot in degrees
+    :param offset: Distance in meters that the GPS is offset behind the sensor (default is 0.6 meters)
+    :return: (adjusted_latitude, adjusted_longitude)
+    """
+    # Convert heading to radians
+    heading_rad = np.radians(heading)
+    
+    # Calculate the offset vector components
+    delta_north = offset * np.cos(heading_rad)  # north component
+    delta_east = offset * np.sin(heading_rad)   # east component
+    
+    # Approximate conversion from degrees to meters at the equator
+    meters_per_degree_lat = 111320
+    meters_per_degree_lon = 111320 * np.cos(np.radians(lat))
+    
+    # Adjust latitude and longitude
+    adjusted_lat = lat + (delta_north / meters_per_degree_lat)
+    adjusted_lon = lon + (delta_east / meters_per_degree_lon)
+    
+    return (adjusted_lat, adjusted_lon)
+
 def rotate_vector(vector, angle):
     """
     Rotate a vector by a given angle.

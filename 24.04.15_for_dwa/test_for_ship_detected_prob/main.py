@@ -20,6 +20,7 @@ class boat:
             # pc get params
             'mode_chk': "SELF", 'pwml_chk': None, 'pwmr_chk': None, # nucleo get params
             'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving
+            "waypoint_lat_m" : None, "waypoint_lon_m" : None,
             # gnss get params below
             'velocity': None, 'heading': 0, 'roll': None, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None,
             "longitude": 127.077618, "latitude": 37.633173,
@@ -92,8 +93,8 @@ class boat:
 
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
-            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/3", self.gnss_lock, 1)
+            self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
+            # self.serial_gnss_cpy = serial_gnss("/dev/pts/5", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -147,17 +148,38 @@ class boat:
             # print("update rviz destination marker error (maybe some of values are None) : ", e)
 
     
-    def update_waypoint(self, data):
+    def update_local_waypoint(self, data):
         try:
-            print("local planning data : ", data)
             if data.poses:
                 last_pose = data.poses[-1]
-                self.current_value["waypoint_latitude"] = round(float(last_pose.pose.position.x), 2)
-                self.current_value["waypoint_longitude"] = round(float(last_pose.pose.position.y), 2)
-                print(f"Updated waypoint: Latitude = {self.current_value['waypoint_latitude']}, Longitude = {self.current_value['waypoint_longitude']}")
+                self.current_value["waypoint_lat_m"] = round(float(last_pose.pose.position.x), 2)
+                self.current_value["waypoint_lon_m"] = round(float(last_pose.pose.position.y), 2)
+                
+                t = time.localtime()    
+                log_time = time.strftime("%H:%M:%S", t)
+                with open("log_local_planner", "a") as file:
+                    file.write("{} : {}, {}\n".format(log_time, self.current_value["waypoint_lat_m"], self.current_value["waypoint_lon_m"]))
+                
+                print(f"Updated waypoint: d_lat = {self.current_value['waypoint_lat_m']}, d_lon = {self.current_value['waypoint_lon_m']}")
         except Exception as e:
             print("Error in update_waypoint: ", e)
 
+    def update_global_waypoint(self, data):
+        try:
+            if data.poses:
+                print("globaldata : \n", data)
+                last_pose = data.poses[5]
+                self.current_value["waypoint_lat_m"] = round(float(last_pose.pose.position.x), 2)
+                self.current_value["waypoint_lon_m"] = round(float(last_pose.pose.position.y), 2)
+                
+                t = time.localtime()    
+                log_time = time.strftime("%H:%M:%S", t)
+                with open("log_local_planner", "a") as file:
+                    file.write("{} : {}, {}\n".format(log_time, self.current_value["waypoint_lat_m"], self.current_value["waypoint_lon_m"]))
+                
+                print(f"Updated waypoint: d_lat = {self.current_value['waypoint_lat_m']}, d_lon = {self.current_value['waypoint_lon_m']}")
+        except Exception as e:
+            print("Error in update_waypoint: ", e)
 
         # # 웨이포인트 업데이트 (PoseStamped 메시지에서 경도와 위도 추출)
         # self.current_value["waypoint_latitude"] = data.pose.position.x

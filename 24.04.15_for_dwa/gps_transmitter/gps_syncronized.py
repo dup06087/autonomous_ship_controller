@@ -9,7 +9,7 @@ import sys  # sys 모듈 추가
 gps_data_file = "./24.04.09_one_lap.txt"
 
 # 시리얼 포트 설정
-port = "/dev/pts/4"  # 실제 사용하는 포트 번호로 변경해주세요.
+port = "/dev/pts/5"  # 실제 사용하는 포트 번호로 변경해주세요.
 baudrate = 115200
 ser = serial.Serial(port, baudrate)
 

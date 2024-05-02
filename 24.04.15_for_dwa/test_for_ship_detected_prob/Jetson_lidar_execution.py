@@ -69,7 +69,7 @@ class PointCloudProcessor:
 
         # start=[-0.924, -0.36, -0.7]; end=[0.96, 0.36, 0.2] # no obstacle, little bigger than crop roi 
         # start=[-1, -5, -0.5]; end=[20, 5, 0.5] # original
-        start=[-100, -100, -0.7]; end=[100, 100, 0.5] 
+        start=[-100, -100, -0.6]; end=[100, 100, 0.5] 
         
         min_bound = np.array(start)
         max_bound = np.array(end)
@@ -80,10 +80,10 @@ class PointCloudProcessor:
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
         
         # Voxel down-sampling
-        pcd = self.voxel_down_sampling(pcd, voxel_size=0.05)
+        pcd = self.voxel_down_sampling(pcd, voxel_size=0.03)
 
         # Radius outlier removal
-        pcd, ind = self.radius_outlier_removal(pcd, nb_points=10, radius=0.7)
+        pcd, ind = self.radius_outlier_removal(pcd, nb_points=6, radius=0.5)
         if len(pcd.points) == 0:
             rospy.logwarn("No points left after filtering")
             return

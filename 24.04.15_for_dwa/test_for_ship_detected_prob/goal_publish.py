@@ -5,7 +5,7 @@ from move_base_msgs.msg import MoveBaseAction
 from actionlib_msgs.msg import GoalID
 from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import Empty
-import math
+import math, time
 
 class NavigationController:
     def __init__(self, boat_instance):
@@ -26,7 +26,7 @@ class NavigationController:
 
     def publish_nav_goal(self):
         self.client.wait_for_server()
-        
+        time_prev = time.time()
         while not rospy.is_shutdown():  # 외부 루프
             try:
                 if self.boat.current_value['flag_autodrive']:
@@ -38,12 +38,18 @@ class NavigationController:
                         dest_lon = self.boat.current_value['dest_longitude'][self.boat.current_value["cnt_destination"]]
                         heading = self.boat.current_value['heading']
                     except Exception as e:
-                        print("variable error : ", e)
-                        
+                        time_current = time.time()
+                        if time_current - time_prev >= 5:
+                            print("publishing goal error : ", e)
+                            time_prev = time_current
+                        rospy.sleep(1)
+                        continue
                         
                     try:
                         dx, dy = self.get_relative_position(lat, lon, dest_lat, dest_lon, heading)
-                        quaternion = self.heading_to_quaternion(heading)
+                        
+                        quaternion = self.heading_to_quaternion(math.atan2(dy, dx))
+                        # quaternion = self.heading_to_quaternion(0)
                         goal = PoseStamped()
                         goal.header.stamp = rospy.Time.now()
                         goal.header.frame_id = self.frame_id
@@ -53,16 +59,23 @@ class NavigationController:
                         goal.pose.orientation.y = quaternion[1]
                         goal.pose.orientation.z = quaternion[2]
                         goal.pose.orientation.w = quaternion[3]
-                    except Exception as e:
-                        print("pose error : ", e)
                         
+                    except Exception as e:
+                        time_current = time.time()
+                        if time_current - time_prev >= 5:
+                            print("publishing goal destination error : ", e)
+                            time_prev = time_current
+                        rospy.sleep(1)
+                        continue
+                    
                     self.pub_goal.publish(goal)
                     print("Goal published: Position - ({}, {}), Orientation - {}".format(dx, dy, quaternion))
                     rospy.sleep(1)
                     
                 else:
-                    print("navigation else")
                     self.cancel_all_goals()
+                    self.boat.current_value['pwml_auto'] = 1500
+                    self.boat.current_value['pwmr_auto'] = 1500
                     rospy.sleep(1)  # 중지 상태에서는 1초마다 확인
                     
             except Exception as e:
@@ -87,7 +100,29 @@ class NavigationController:
         sy = math.sin(heading * 0.5)
         return (0, 0, sy, cy)
 
+    # def get_relative_position(self, current_lat, current_lon, goal_lat, goal_lon, heading):
+    #     R = 6371000  # 지구 반경 (미터 단위)
+    #     phi1 = math.radians(current_lat)
+    #     phi2 = math.radians(goal_lat)
+    #     delta_phi = math.radians(goal_lat - current_lat)
+    #     delta_lambda = math.radians(goal_lon - current_lon)
+
+    #     a = math.sin(delta_phi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda/2)**2
+    #     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    #     distance = R * c
+
+    #     y = math.sin(delta_lambda) * math.cos(phi2)
+    #     x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
+    #     bearing = math.atan2(y, x)
+
+    #     adjusted_bearing = bearing - heading + math.pi/2 # 시계 방향으로 90도 더 회전 + 
+    #     dx = distance * math.sin(adjusted_bearing)
+    #     dy = distance * math.cos(adjusted_bearing)
+
+    #     return dx, dy
+
     def get_relative_position(self, current_lat, current_lon, goal_lat, goal_lon, heading):
+        import math
         R = 6371000  # 지구 반경 (미터 단위)
         phi1 = math.radians(current_lat)
         phi2 = math.radians(goal_lat)
@@ -102,13 +137,16 @@ class NavigationController:
         x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
         bearing = math.atan2(y, x)
 
-        adjusted_bearing = bearing - heading + math.pi/2  # 시계 방향으로 90도 더 회전
+        # heading이 degree 단위로 주어진다면, 이를 radians로 변환
+        heading_rad = math.radians(heading)
+
+        # heading을 고려한 베어링 조정
+        adjusted_bearing = bearing - heading_rad + math.pi / 2
+
         dx = distance * math.sin(adjusted_bearing)
         dy = distance * math.cos(adjusted_bearing)
 
         return dx, dy
-
-
 
 if __name__ == '__main__':
     boat_instance = None  # Replace with actual instance if necessary
