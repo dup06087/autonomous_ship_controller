@@ -28,8 +28,8 @@ class PointCloud2Bag:
 
 if __name__ == '__main__':
     rospy.init_node('pointcloud_to_rosbag', anonymous=True)
-    # topic_name = '/velodyne_points'  # VLP-16 포인트클라우드 데이터가 발행되는 토픽 이름
-    topic_name = '/processed_pointcloud'
+    topic_name = '/velodyne_points'  # VLP-16 포인트클라우드 데이터가 발행되는 토픽 이름
+    # topic_name = '/processed_pointcloud'
     pc2_bag = PointCloud2Bag(topic_name)
     
     rospy.on_shutdown(pc2_bag.close_bag)  # 노드 종료 시 rosbag 파일 닫기

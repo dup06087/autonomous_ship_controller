@@ -33,6 +33,7 @@ def auto_drive(self):
     # 웨이포인트를 받기 위한 구독자 설정 (토픽 이름과 메시지 유형은 예시일 뿐 실제 프로젝트에서 확인 필요)
     # rospy.Subscriber("/move_base/DWAPlannerROS/local_plan", Path, self.update_local_waypoint)
     rospy.Subscriber("/move_base/DWAPlannerROS/global_plan", Path, self.update_global_waypoint)
+    rospy.Timer(rospy.Duration(1), self.check_global_waypoint_timeout)
 
     last_print_time = time.time()  # 占쏙옙占쏙옙占쏙옙占쏙옙占쏙옙 占쏙옙占쏙옙占?占시곤옙 占십깍옙화
 
@@ -47,7 +48,6 @@ def auto_drive(self):
                             
             t = time.localtime()
             current_time = time.strftime("%H:%M:%S", t)
-            
             if flag_arrived:
                 self.current_value["dest_latitude"] = None
                 self.current_value["dest_longitude"] = None
@@ -58,100 +58,116 @@ def auto_drive(self):
                 destination_longitude = []
 
                 flag_arrived = False
-                
-            flag_ready_to_auto_drive, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading = self.flag_check_for_autodrive()
-            
-            """ simulation
-            flag_ready_to_auto_drive = True
-            current_latitude, current_longitude, destination_latitude, destination_longitude
-            """
-            
-            current_latitude, current_longitude, destination_latitude, destination_longitude = self.current_value["latitude"], self.current_value["longitude"], self.current_value["dest_latitude"], self.current_value["dest_longitude"]
-            current_heading = self.current_value["heading"]
-            
-            if destination_latitude != prev_destination_latitude or destination_longitude != prev_destination_longitude: # arrived, new_destination_arrived
-                self.cnt_destination = 0
-                self.current_value["cnt_destination"] = self.cnt_destination
-                prev_destination_latitude = destination_latitude
-                prev_destination_longitude = destination_longitude
-            
-            # print("flag check : ", self.flag_check_for_autodrive())
-            if not flag_ready_to_auto_drive: # not ready                   
-                # counter_dead_autodrive += 1
-                # if counter_dead_autodrive >= 5: # time sleep 0.2s * 5
-                self.current_value["pwml_auto"] = 1500
-                self.current_value["pwmr_auto"] = 1500
-                self.current_value["waypoint_lat_m"] = None
-                self.current_value["waypoint_lon_m"] = None
-                if self.current_value["mode_pc_command"] == "AUTO":
-                    with open('log_flag_stop.txt', 'a') as file:
-                        file.write(f"{self.log_time} : {self.autodrive_output_flag}\n")
-                
-                # cnt_destination still alive
-                time_ = time.time()
-                if time_ - prev_time >= 3:
-                    print("manual driving")
-                    prev_time = time_
-                
-                time.sleep(0.2)
+            try:
+                flag_ready_to_auto_drive, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading = self.flag_check_for_autodrive()
 
-            else: ### ready to auto drive
-                self.current_value["arrived"] = False
-                counter_dead_autodrive = 0
-                base_lat = current_latitude
-                base_lon = current_longitude
-                if self.current_value["waypoint_lat_m"] == None or self.current_value["waypoint_lon_m"] == None:    
+                """ simulation
+                flag_ready_to_auto_drive = True
+                current_latitude, current_longitude, destination_latitude, destination_longitude
+                """
+                current_latitude, current_longitude, destination_latitude, destination_longitude = self.current_value["latitude"], self.current_value["longitude"], self.current_value["dest_latitude"], self.current_value["dest_longitude"]
+                current_heading = self.current_value["heading"]
+                
+                if destination_latitude != prev_destination_latitude or destination_longitude != prev_destination_longitude: # arrived, new_destination_arrived
+                    self.cnt_destination = 0
+                    self.current_value["cnt_destination"] = self.cnt_destination
+                    prev_destination_latitude = destination_latitude
+                    prev_destination_longitude = destination_longitude
+                
+                # print("flag check : ", self.flag_check_for_autodrive())
+                if not flag_ready_to_auto_drive: # not ready                   
+                    # counter_dead_autodrive += 1
+                    # if counter_dead_autodrive >= 5: # time sleep 0.2s * 5
                     self.current_value["pwml_auto"] = 1500
                     self.current_value["pwmr_auto"] = 1500
-                    continue
-                else:
-                    distance_x = self.current_value["waypoint_lat_m"]
-                    distance_y = self.current_value["waypoint_lon_m"]
+                    self.current_value["waypoint_lat_m"] = None
+                    self.current_value["waypoint_lon_m"] = None
+                    if self.current_value["mode_pc_command"] == "AUTO":
+                        with open('log_flag_stop.txt', 'a') as file:
+                            file.write(f"{self.log_time} : {self.autodrive_output_flag}\n")
                     
-                current_heading = self.current_value["heading"]
-                target_lat, target_lon = convert_metric_to_latlon(base_lat, base_lon, distance_x, distance_y, current_heading) # target : 위경도
-                adjusted_target_lat, adjusted_target_lon = adjust_gps_position(target_lat, target_lon, current_heading)
-                
-                self.current_value["waypoint_latitude"] = adjusted_target_lat
-                self.current_value["waypoint_longitude"] = adjusted_target_lon
-
-                calculate_pwm_auto(self, current_latitude, current_longitude, float(adjusted_target_lat), float(adjusted_target_lon), current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
-                
-                t = time.localtime()    
-                log_time = time.strftime("%H:%M:%S", t)
-
-                with open('log_pwm.txt', 'a') as file:
-                    file.write("{} : {},{}\n".format(log_time, self.current_value["pwml_auto"], self.current_value["pwmr_auto"]))
-                
-                ''' self.distance_to_target 값 none 아닌지 확인하는 코드 추가'''
-                if float(self.distance_to_target) <= 1:
-                    # print("where is the prob2")
-                    self.cnt_destination += 1
-                    self.current_value['cnt_destination'] = self.cnt_destination
+                    # cnt_destination still alive
+                    time_ = time.time()
+                    if time_ - prev_time >= 3:
+                        print("manual driving")
+                        prev_time = time_
                     
-                    if self.cnt_destination >= len(self.current_value['dest_latitude']):
-                        # print("where is the prob3")
-                        self.cnt_destination = 0
+                    time.sleep(0.2)
+            except Exception as e:
+                print("error here : ", e)
+                
+            else: ### ready to auto drive
+                try:
+                    self.current_value["arrived"] = False
+                    counter_dead_autodrive = 0
+                    base_lat = current_latitude
+                    base_lon = current_longitude
+                    if self.current_value["waypoint_lat_m"] == None or self.current_value["waypoint_lon_m"] == None:    
+                        self.current_value["pwml_auto"] = 1500
+                        self.current_value["pwmr_auto"] = 1500
+                        continue
+                    else:
+                        distance_x = self.current_value["waypoint_lat_m"]
+                        distance_y = self.current_value["waypoint_lon_m"]
+
+                    current_heading = self.current_value["heading"]
+                    try: 
+                        target_lat, target_lon = convert_metric_to_latlon(base_lat, base_lon, distance_x, distance_y, current_heading) # target : 위경도
+                        adjusted_target_lat, adjusted_target_lon = adjust_gps_position(target_lat, target_lon, current_heading)
+                    except Exception as e:
+                        print("error 3 : ", e)
+                    
+                    try:
+                        self.current_value["waypoint_latitude"] = adjusted_target_lat
+                        self.current_value["waypoint_longitude"] = adjusted_target_lon
+                        calculate_pwm_auto(self, current_latitude, current_longitude, float(adjusted_target_lat), float(adjusted_target_lon), current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
+                    except Exception as e:
+                        print("error 4 : ", e)
+                    t = time.localtime()    
+                    log_time = time.strftime("%H:%M:%S", t)
+
+                    try:
+                        # with open('log_pwm.txt', 'a') as file:
+                        #     file.write("{} : {},{}\n".format(log_time, self.current_value["pwml_auto"], self.current_value["pwmr_auto"]))
+                        self.distance_to_target = haversine((current_latitude, current_longitude),
+                                            (self.current_value['dest_latitude'][self.cnt_destination], self.current_value['dest_longitude'][self.cnt_destination]), unit='m')
+                
+                        self.current_value['distance'] = float(self.distance_to_target)
+                    except Exception as e:
+                        print("error 5 : ", e)
+                        
+                    ''' self.distance_to_target 값 none 아닌지 확인하는 코드 추가'''
+                    if float(self.distance_to_target) <= 2:
+                        # print("where is the prob2")
+                        
+                        self.cnt_destination += 1
                         self.current_value['cnt_destination'] = self.cnt_destination
                         
-                        self.current_value['pwml_auto'] = 1500
-                        self.current_value['pwmr_auto'] = 1500
-                        self.distance_to_target = None
-                        self.current_value['distance'] = None
-                        
-                        # below pc command
-                        self.current_value['mode_pc_command'] = "SELF"
-                        self.current_value["dest_latitude"] = None
-                        self.current_value["dest_longitude"] = None
-                        
-                        self.current_value["waypoint_latitude"] = None
-                        self.current_value["waypoint_longitude"] = None
-                        
-                        print("Arrived")
-                        flag_ready_to_auto_drive = False
-                        flag_arrived = True
-                        self.current_value["arrived"] = True
-                        continue 
+                        if self.cnt_destination >= len(self.current_value['dest_latitude']):
+                            # print("where is the prob3")
+                            self.cnt_destination = 0
+                            self.current_value['cnt_destination'] = self.cnt_destination
+                            
+                            self.current_value['pwml_auto'] = 1500
+                            self.current_value['pwmr_auto'] = 1500
+                            self.distance_to_target = None
+                            self.current_value['distance'] = None
+                            
+                            # below pc command
+                            self.current_value['mode_pc_command'] = "SELF"
+                            self.current_value["dest_latitude"] = None
+                            self.current_value["dest_longitude"] = None
+                            
+                            self.current_value["waypoint_latitude"] = None
+                            self.current_value["waypoint_longitude"] = None
+                            
+                            print("Arrived")
+                            flag_ready_to_auto_drive = False
+                            flag_arrived = True
+                            self.current_value["arrived"] = True
+                            continue 
+                except Exception as e:
+                    print('error here 2 : ', e)
                     
                 current_time = time.time()
                 if current_time - last_print_time >= 3: 
@@ -160,7 +176,7 @@ def auto_drive(self):
                         last_print_time = current_time  
                     except :
                         print("NOOOOOp")
-            
+
             # print("auto drive end")
             time.sleep(0.2)
 
@@ -198,10 +214,9 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
        
         if current_heading > 180:
             current_heading = current_heading - 360
-        
-        self.distance_to_target = haversine((current_latitude, current_longitude),
-                                            (destination_latitude, destination_longitude), unit='m')
-        self.current_value['distance'] = float(self.distance_to_target)
+                
+        self.distance_to_waypoint = haversine((current_latitude, current_longitude),
+                                    (destination_latitude, destination_longitude), unit='m')
 
         target_angle = math.degrees(
             math.atan2(destination_longitude - current_longitude, destination_latitude - current_latitude))
@@ -213,8 +228,8 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
             pass
             # angle_diff += 360
 
-        self.throttle_component = self.distance_to_target * math.cos(math.radians(angle_diff))
-        self.roll_component = self.distance_to_target * math.sin(math.radians(angle_diff))
+        self.throttle_component = self.distance_to_waypoint * math.cos(math.radians(angle_diff))
+        self.roll_component = self.distance_to_waypoint * math.sin(math.radians(angle_diff))
 
         # print("throttle, roll : ",s/elf.throttle_component, self.roll_component)
         # Kf = 2.5

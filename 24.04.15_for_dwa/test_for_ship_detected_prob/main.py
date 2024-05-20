@@ -1,4 +1,4 @@
-import math, queue, socket, time, threading, serial, json, random, select, re, atexit
+import math, queue, socket, time, threading, serial, json, random, select, re, atexit, rospy
 from Jetson_initalizing_values import initialize_variables
 from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
@@ -7,9 +7,20 @@ from Jetson_lidar_execution import PointCloudProcessor
 
 from auto_drive import auto_drive
 from goal_publish import NavigationController
+from datetime import datetime
 
 import copy
 from math import radians, cos, sin, asin, sqrt, atan2, degrees
+from nav_msgs.msg import Path
+
+import signal
+import sys
+
+def signal_handler(sig, frame):
+    print('You pressed Ctrl+C!')
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
 
 class boat:
     def __init__(self):
@@ -27,6 +38,7 @@ class boat:
             "arrived" : False, "flag_autodrive" : False
             # gnss end
             } # cf. com_status undefined
+        
         initialize_variables(self)
 
         self.serial_nucleo_cpy = None
@@ -34,10 +46,9 @@ class boat:
         self.lidar_processing_cpy = None
 
         self.gnss_lock = threading.Lock()
-
+        self.path_publisher = rospy.Publisher("/filtered_global_plan", Path, queue_size=2)
 
         # self.obstacle_coordinates = None
-
 
     def haversine(self, lon1, lat1, lon2, lat2):
         """
@@ -94,7 +105,7 @@ class boat:
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
             self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            # self.serial_gnss_cpy = serial_gnss("/dev/pts/5", self.gnss_lock, 1)
+            # self.serial_gnss_cpy = serial_gnss("/dev/pts/8", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -157,7 +168,7 @@ class boat:
                 
                 t = time.localtime()    
                 log_time = time.strftime("%H:%M:%S", t)
-                with open("log_local_planner", "a") as file:
+                with open("log_local_planner.txt", "a") as file:
                     file.write("{} : {}, {}\n".format(log_time, self.current_value["waypoint_lat_m"], self.current_value["waypoint_lon_m"]))
                 
                 print(f"Updated waypoint: d_lat = {self.current_value['waypoint_lat_m']}, d_lon = {self.current_value['waypoint_lon_m']}")
@@ -166,26 +177,45 @@ class boat:
 
     def update_global_waypoint(self, data):
         try:
-            if data.poses:
-                print("globaldata : \n", data)
-                last_pose = data.poses[5]
-                self.current_value["waypoint_lat_m"] = round(float(last_pose.pose.position.x), 2)
-                self.current_value["waypoint_lon_m"] = round(float(last_pose.pose.position.y), 2)
+            if not self.flag_stop_update_waypoint:
+                if data.poses :
+                    self.last_received_time = data.header.stamp.to_sec()
+
+                    # print("globaldata : \n", data)
+                    last_pose = data.poses[5]
+                    self.current_value["waypoint_lat_m"] = round(float(last_pose.pose.position.x), 2)
+                    self.current_value["waypoint_lon_m"] = round(float(last_pose.pose.position.y), 2)
+                    
+                    t = time.localtime()    
+                    log_time = time.strftime("%H:%M:%S", t)
+                    with open("log_local_planner", "a") as file:
+                        file.write("{} : {}, {}\n".format(log_time, self.current_value["waypoint_lat_m"], self.current_value["waypoint_lon_m"]))
+                    
+                    print(f"Updated waypoint: d_lat = {self.current_value['waypoint_lat_m']}, d_lon = {self.current_value['waypoint_lon_m']}")
+                    self.path_publisher.publish(data)
+
+                else:
+                    pass
+            else:
+                print("ignore current global waypoint(cleared but not updated costmap)")
                 
-                t = time.localtime()    
-                log_time = time.strftime("%H:%M:%S", t)
-                with open("log_local_planner", "a") as file:
-                    file.write("{} : {}, {}\n".format(log_time, self.current_value["waypoint_lat_m"], self.current_value["waypoint_lon_m"]))
-                
-                print(f"Updated waypoint: d_lat = {self.current_value['waypoint_lat_m']}, d_lon = {self.current_value['waypoint_lon_m']}")
         except Exception as e:
+            self.flag_waypoint_publishing = False
             print("Error in update_waypoint: ", e)
 
-        # # 웨이포인트 업데이트 (PoseStamped 메시지에서 경도와 위도 추출)
-        # self.current_value["waypoint_latitude"] = data.pose.position.x
-        # self.current_value["waypoint_longitude"] = data.pose.position.y
-        # # PWM 계산을 바로 호출할 수 있습니다.
+    def check_global_waypoint_timeout(self, event):
+        if self.last_received_time is None:
+            return  # 아직 메시지를 받지 않았다면 패스
 
+        if self.current_value['flag_autodrive'] == False:
+            return
+        else:
+            current_time = rospy.get_time()
+            if current_time - self.last_received_time > self.goal_subscribe_timeout: ### last_received_time은 update_global_waypoint에서 초기화
+                self.current_value['pwml_auto'] = 1500
+                self.current_value['pwmr_auto'] = 1500
+                rospy.loginfo("긴급 중지: 경로 업데이트 안 됨")
+            
     def collect_data(self):
         try:    
             # print("collecting")
@@ -193,7 +223,7 @@ class boat:
             tasks = [lambda : self.update_seperate_data(), 
                     self.update_pc_command,
                     self.update_pc_coeff,
-                    # self.update_jetson_coeff,
+                    self.update_jetson_coeff,
                     # self.update_vff_coeff,
                     self.update_gnss_data,
                     self.update_rviz_dest_point
@@ -213,10 +243,12 @@ class boat:
                 # print("collected current value : ", self.current_value)
                 
                 ''' current value logger '''
-                t = time.localtime()
-                self.log_time = time.strftime("%H:%M:%S", t)
+                
+                current_time = datetime.now()
+                log_time = current_time.strftime("%m-%d %H:%M:%S") + '.' + str(current_time.microsecond // 100000)
+
                 with open('log_current_value.txt', 'a') as file:
-                    file.write(f"{self.log_time} : {self.current_value}\n")
+                    file.write(f"{log_time} : {self.current_value}\n")
                         
                 time.sleep(0.2)
                 
@@ -247,7 +279,7 @@ class boat:
         try:
             self.current_value["flag_autodrive"] = self.flag_autodrive
         except Exception as e:
-            pass        
+            print("flag_autodrive update error : ", e)        
 
     def update_pc_command(self):
         current_pc_command = self.jetson_socket_pc.pc_command
@@ -255,7 +287,6 @@ class boat:
             self.current_value.update(current_pc_command)
             self.prev_pc_command = copy.deepcopy(current_pc_command)
 
-                
     def update_pc_coeff(self):
         current_pc_coeff = self.jetson_socket_pc.pc_coeff
         if current_pc_coeff != self.prev_pc_coeff:
@@ -324,7 +355,7 @@ class boat:
         heading = self.current_value['heading']
         
         flag_ready_gnss_data = (lat is not None and lon is not None and dest_lat is not None and dest_lon is not None and heading is not None)
-        flag_ready_nucleo_data = (not self.current_value["mode_chk"] <= 20) # mode_chk == 0 >> need to bind
+        flag_ready_nucleo_data = (not self.current_value["mode_chk"] <= 20) # mode_chk == 0 >> need to bind # error : '<=' not supported between instances of 'str' and 'int'
         flag_auto_drive_command =(self.current_value["mode_pc_command"] == "AUTO")
         # print(lat, lon, dest_lat, dest_lon, heading)
         # print("flag_ready_gnss_data : ", flag_ready_gnss_data, ", flag_ready_nucleo_data : ", flag_ready_nucleo_data, ", flag_auto_drive_command : ", flag_auto_drive_command)

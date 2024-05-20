@@ -13,6 +13,7 @@ class PointCloudProcessor:
         self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback)
         self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=10)
         self.bbox_lists = []
+        self.pitch = None
         
     def voxel_down_sampling(self, pcd, voxel_size):
         return pcd.voxel_down_sample(voxel_size)
@@ -56,34 +57,72 @@ class PointCloudProcessor:
         filtered_pcd.points = o3d.utility.Vector3dVector(filtered_pcd_np)
 
         return filtered_pcd
+    
+    def filter_by_intensity(self, pc_arr, threshold=5):
+        mask = pc_arr['intensity'] > threshold
+        return pc_arr[mask]
 
+    def crop_roi(self, pcd, start, end):
+        # start=[-0.924, -0.36, -0.7]; end=[0.96, 0.36, 0.2] # no obstacle, little bigger than crop roi 
+        # start=[-1, -5, -0.5]; end=[20, 5, 0.5] # original
+        
+        min_bound = np.array(start)
+        max_bound = np.array(end)
+        roi_bounding_box = o3d.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
+        return pcd.crop(roi_bounding_box)
+    
 
+    def rotate_point_cloud_by_pitch(self, pcd):
+        """
+        Rotate the point cloud by a given pitch angle.
+
+        :param pcd: Open3D point cloud object to be rotated.
+        :param pitch: The pitch angle in degrees to rotate the point cloud.
+        :return: Rotated Open3D point cloud object.
+        """
+        
+        if self.pitch == None:
+            return pcd
+        
+        pitch_rad = np.radians(self.pitch)
+        
+        R = np.array([[np.cos(pitch_rad), 0, np.sin(pitch_rad)],
+                      [0, 1, 0],
+                      [-np.sin(pitch_rad), 0, np.cos(pitch_rad)]])
+        
+        # Apply the rotation to each point in the point cloud
+        pcd.rotate(R, center=(0, 0, 0))
+        
+        return pcd
+    
     def callback(self, msg):
         time_diff = rospy.Time.now() - msg.header.stamp
         if time_diff.to_sec() > 0.05: # realtime
             return
         
         pc_array = ros_np.pointcloud2_to_array(msg)
+        # pc_array = self.filter_by_intensity(pc_array, threshold=self.intensity)
+        
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(np.column_stack((pc_array['x'], pc_array['y'], pc_array['z'])))
 
-        # start=[-0.924, -0.36, -0.7]; end=[0.96, 0.36, 0.2] # no obstacle, little bigger than crop roi 
-        # start=[-1, -5, -0.5]; end=[20, 5, 0.5] # original
-        start=[-100, -100, -0.6]; end=[100, 100, 0.5] 
-        
-        min_bound = np.array(start)
-        max_bound = np.array(end)
-        roi_bounding_box = o3d.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
-        pcd = pcd.crop(roi_bounding_box)
+        pcd = self.voxel_down_sampling(pcd, voxel_size=self.voxel_size)
 
-        ship_body_bounds = {'min': [-1, -0.4, -0.6], 'max': [1, 0.4, 0.1]}  # 선체가 위치하는 영역을 지정
+        pcd = self.rotate_point_cloud_by_pitch(pcd)
+        
+        pcd = self.crop_roi(pcd, start=[-100, -100, -0.6], end=[100, 100, 0.3])
+
+        # ship_body_bounds = {'min': [-1.1, -0.51, -0.6], 'max': [1.1, 0.51, 0.1]}  # 선체가 위치하는 영역을 지정
+        ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}  # 선체가 위치하는 영역을 지정
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
         
-        # Voxel down-sampling
-        pcd = self.voxel_down_sampling(pcd, voxel_size=0.03)
-
-        # Radius outlier removal
-        pcd, ind = self.radius_outlier_removal(pcd, nb_points=6, radius=0.5)
+        # Flatten the z-coordinate to create a 2D point cloud
+        points = np.asarray(pcd.points)
+        points[:, 2] = 0  # Set z values to 0
+        pcd.points = o3d.utility.Vector3dVector(points)
+        
+        pcd, ind = self.radius_outlier_removal(pcd, nb_points=int(self.dbscan_minpoints), radius=self.dbscan_eps)
+        
         if len(pcd.points) == 0:
             rospy.logwarn("No points left after filtering")
             return

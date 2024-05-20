@@ -6,6 +6,8 @@ from actionlib_msgs.msg import GoalID
 from geometry_msgs.msg import PoseStamped
 from std_srvs.srv import Empty
 import math, time
+from nav_msgs.msg import OccupancyGrid
+from map_msgs.msg import OccupancyGridUpdate
 
 class NavigationController:
     def __init__(self, boat_instance):
@@ -14,6 +16,18 @@ class NavigationController:
         self.pub_goal = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
         self.pub_cancel = rospy.Publisher('/move_base/cancel', GoalID, queue_size=10)
         self.clear_costmaps_service = rospy.ServiceProxy('/move_base/clear_costmaps', Empty)
+        # self.costmap_updates_subscriber = rospy.Subscriber(
+        #     "/move_base/global_costmap/costmap", 
+        #     OccupancyGrid, 
+        #     self.costmap_updates_callback
+        # )
+        
+        self.costmap_updates_subscriber = rospy.Subscriber(
+            "/move_base/global_costmap/costmap_updates", 
+            OccupancyGridUpdate, 
+            self.costmap_updates_callback
+        )
+                
         self.current_lat = 0.0
         self.current_lon = 0.0
         self.goal_lat = 0.0
@@ -27,9 +41,13 @@ class NavigationController:
     def publish_nav_goal(self):
         self.client.wait_for_server()
         time_prev = time.time()
+        counter_false_autodrive = 0  # Counter for consecutive falses
+
         while not rospy.is_shutdown():  # 외부 루프
             try:
                 if self.boat.current_value['flag_autodrive']:
+                    counter_false_autodrive = 0  # Reset counter if autodrive is true
+
                     # print("goal publsihing")
                     try:
                         lat = self.boat.current_value['latitude']
@@ -73,10 +91,13 @@ class NavigationController:
                     rospy.sleep(1)
                     
                 else:
-                    self.cancel_all_goals()
-                    self.boat.current_value['pwml_auto'] = 1500
-                    self.boat.current_value['pwmr_auto'] = 1500
-                    rospy.sleep(1)  # 중지 상태에서는 1초마다 확인
+                    # 목표지점까지 취소하는것 : 이것은 flag autodrive보다도 엄격히 적용
+                    counter_false_autodrive += 1  # Increment counter if autodrive is false
+                    if counter_false_autodrive > 6: # 3 second
+                        self.cancel_all_goals()
+                        self.boat.current_value['pwml_auto'] = 1500
+                        self.boat.current_value['pwmr_auto'] = 1500
+                    rospy.sleep(0.5)  # 중지 상태에서는 1초마다 확인
                     
             except Exception as e:
                 pass
@@ -90,36 +111,23 @@ class NavigationController:
 
     def clear_costmaps_callback(self, event):
         try:
+            self.boat.flag_stop_update_waypoint = True
             self.clear_costmaps_service()
-            rospy.loginfo("Costmaps cleared successfully.")
+            rospy.loginfo("Costmaps cleared successfully(per second).")
         except rospy.ServiceException as e:
             rospy.logerr("Service call failed: %s", e)
-
+        except Exception as e:
+            print("clear costmap callback : ", e)
+        
+    def costmap_updates_callback(self, data):
+        if self.boat.flag_stop_update_waypoint:
+            self.boat.flag_stop_update_waypoint = False  # 데이터 수신 시 플래그 설정
+        rospy.loginfo("Received costmap update.")
+        
     def heading_to_quaternion(self, heading):
         cy = math.cos(heading * 0.5)
         sy = math.sin(heading * 0.5)
         return (0, 0, sy, cy)
-
-    # def get_relative_position(self, current_lat, current_lon, goal_lat, goal_lon, heading):
-    #     R = 6371000  # 지구 반경 (미터 단위)
-    #     phi1 = math.radians(current_lat)
-    #     phi2 = math.radians(goal_lat)
-    #     delta_phi = math.radians(goal_lat - current_lat)
-    #     delta_lambda = math.radians(goal_lon - current_lon)
-
-    #     a = math.sin(delta_phi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda/2)**2
-    #     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    #     distance = R * c
-
-    #     y = math.sin(delta_lambda) * math.cos(phi2)
-    #     x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
-    #     bearing = math.atan2(y, x)
-
-    #     adjusted_bearing = bearing - heading + math.pi/2 # 시계 방향으로 90도 더 회전 + 
-    #     dx = distance * math.sin(adjusted_bearing)
-    #     dy = distance * math.cos(adjusted_bearing)
-
-    #     return dx, dy
 
     def get_relative_position(self, current_lat, current_lon, goal_lat, goal_lon, heading):
         import math

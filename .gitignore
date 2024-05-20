@@ -39,3 +39,4 @@ auto_drive_without_obstacle/test_for_ship_detected_prob/pc_data_2024_04_25_1336.
 24.04.15_for_dwa/test_for_ship_detected_prob/pc_data_2024_04_25_1723.bag
 24.04.15_for_dwa/test_for_ship_detected_prob/pc_data_2024_04_25_1728.bag
 log_local_planner
+*.bag

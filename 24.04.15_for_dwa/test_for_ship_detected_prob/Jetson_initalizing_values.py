@@ -6,6 +6,7 @@ def initialize_variables(self):
     self.end = 0
     self.flag_exit = False
     self.distance_to_target = 0
+    self.distance_to_waypoint = 0
 
     self.isready = False
     self.isdriving = False
@@ -35,3 +36,9 @@ def initialize_variables(self):
     self.autodrive_output_flag = False
     t = time.localtime()
     self.log_time = time.strftime("%H:%M:%S", t)
+
+    self.last_received_time = None
+    self.goal_subscribe_timeout = 3  # 10초 동안 업데이트가 없으면 경고
+    self.flag_waypoint_publishing = False
+    
+    self.flag_stop_update_waypoint = False

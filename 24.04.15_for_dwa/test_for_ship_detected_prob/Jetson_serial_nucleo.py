@@ -2,12 +2,14 @@ import serial, threading, time, atexit
 from queue import Queue
 import rospy
 import std_msgs.msg
+import atexit
 
 class serial_nucleo:
     def __init__(self, port, baudrate=9600):
         self.port = port
         self.baudrate = baudrate
         self.serial_port = serial.Serial(self.port, self.baudrate, timeout=5)
+        atexit.register(self.close_serial)
 
         # self.motor_pwm_log = rospy.Publisher('/motor_output_log', std_msgs.msg.String, queue_size=None, tcp_nodelay=True)
         # string_msg = std_msgs.msg.String()
@@ -20,11 +22,11 @@ class serial_nucleo:
 
         self.receive_thread = threading.Thread(target=self.data_receive_part)
         self.receive_thread.start()
-        print("receiving thread started")
+        print("nucleo receiving thread started")
 
         self.process_receive_thread = threading.Thread(target=self.data_processing_part)
         self.process_receive_thread.start()
-        print("data processing thread started")
+        print("nucleo data processing thread started")
 
         self.process_transmit_thread = threading.Thread(target=self.data_transmission_part)
         self.process_transmit_thread.start()
@@ -40,6 +42,13 @@ class serial_nucleo:
         self.nucleo_sended_data = None
 
         # neutral : 'mode_chk': 0, 'pwml_chk': 1500, 'pwmr_chk': 1200
+
+    def close_serial(self):
+        if self.serial_port.is_open:
+            self.serial_port.close()
+            with open("close_serial.txt", "a") as file:
+                file.write("closed nucleo well\n")
+            print("nucleo port closed.")
 
     def add_to_queue(self, data):
         with self.lock_recv:

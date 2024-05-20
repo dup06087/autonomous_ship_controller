@@ -2,7 +2,8 @@ import serial, threading, time, atexit
 import threading
 from queue import Queue
 import time
-# import Jetson_gps_send_to_gnss
+from datetime import datetime
+import atexit
 
 class serial_gnss:
     def __init__(self, port, lock, id, baudrate=115200):
@@ -28,18 +29,26 @@ class serial_gnss:
         self.alpha = 0.2/(1+0.2)  # LPF 가중치 설정
         self.previous_values = {'latitude': None, 'longitude': None, 'heading': None, 'pitch': None}
 
+        atexit.register(self.close_serial)
+
     def run(self):
         self.receive_thread = threading.Thread(target=self._data_receive_part)
         self.receive_thread.start()
         # self.receive_thread.join()
-        print("receiving thread started")
+        print("gnss receiving thread started")
 
         self.process_receive_thread = threading.Thread(target=self._data_processing_part)
         self.process_receive_thread.start()
         # self.process_receive_thread.join()
-        print("data processing thread started")
+        print("gnss data processing thread started")
         
-
+    def close_serial(self):
+        if self.serial_port.is_open:
+            self.serial_port.close()
+            with open("close_serial.txt", "a") as file:
+                file.write("closed gnss well\n")
+            print("gnss port closed.")
+            
     def apply_low_pass_filter(self, value_type, new_value):
         if self.lpf_flag:  # lpf_flag가 True인 경우에만 LPF 적용
             if new_value is None:
@@ -69,7 +78,7 @@ class serial_gnss:
     def _data_receive_part(self):
         while self.running:
             try:
-                time.sleep(0.2)  # '''time control'''
+                time.sleep(0.1)  # '''time control'''
                 lines = []
                 while self.serial_port.in_waiting:
                     try:
@@ -123,7 +132,8 @@ class serial_gnss:
                     # print("gnss serial count ", count_alive)
                 else:
                     count_alive += 1
-                    if count_alive >= 5:
+                    if count_alive >= 6:
+                        print("gnss false here1, cnt : ", count_alive)
                         self.flag_gnss = False
                     else:
                         self.flag_gnss = True
@@ -138,14 +148,17 @@ class serial_gnss:
     def process_received_data(self, data):
         try:
             decoded_data = data.decode('utf-8').strip()
-            t = time.localtime()    
-            log_time = time.strftime("%H:%M:%S", t)
-            with open("log_gnss_raw.txt", 'a') as file:
-                file.write(f"{log_time} : {decoded_data}\n")
+            
+            
+            # current_time = datetime.now()
+            # log_time = current_time.strftime("%m-%d %H:%M:%S") + '.' + str(current_time.microsecond // 100000)
+            
+            '''throttling problem too big data'''
+            # with open("log_gnss_raw.txt", 'a') as file:
+            #     file.write(f"{log_time} : {decoded_data}\n")
             
             # print("2. decoded_data : ", decoded_data)
             if not decoded_data.startswith('$'):
-                time.sleep(0.2)
                 return
 
             tokens = decoded_data.split(',')
@@ -164,7 +177,6 @@ class serial_gnss:
             else:
                 print("gnss header : ", header)
                 print("GNSS 데이터 오류 발생 : ", header)
-                time.sleep(0.2)
                 return
 
         except Exception as e:
@@ -181,6 +193,7 @@ class serial_gnss:
                 self.cnt_receive += 1
                 self.current_value['validity'] = validity
                 if self.cnt_receive >= 5:
+                    print("gnss false here 2")
                     self.flag_gnss = False
                 # print("validity : ", validity)
                 # print("current validity : ", self.current_value["validity"])
@@ -238,6 +251,7 @@ class serial_gnss:
             if self.cnt_process >= 5:
                 self.current_value['heading'] = None
                 self.current_value['pitch'] = None
+                print("gnss false here 3")
                 self.flag_gnss = False
             
         except Exception as e:
