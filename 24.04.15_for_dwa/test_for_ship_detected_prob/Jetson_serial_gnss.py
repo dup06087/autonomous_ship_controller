@@ -68,6 +68,7 @@ class serial_gnss:
 
     def add_to_queue(self, data):
         with self.gnss_lock:
+            # print("gnss data : ", data)
             self.receive_queue.put(data)
 
     def get_from_queue(self):
@@ -75,42 +76,65 @@ class serial_gnss:
             return self.receive_queue.get()
         return None
 
+    def connect_serial(self):
+        try:
+            self.serial_port = serial.Serial(self.port, self.baudrate, timeout=10)
+        except Exception as e:
+            print(f"Failed to open serial port {self.port}: {e}")
+            
     def _data_receive_part(self):
+        waiting = False
         while self.running:
             try:
-                time.sleep(0.1)  # '''time control'''
+                time.sleep(0.2)  # '''time control'''
                 lines = []
+                
+                if not self.serial_port.is_open:
+                    time.sleep(1)  # Wait before retrying
+                    self.connect_serial()
+                    print("restart gnss serial connection")
+                    continue
+                
                 while self.serial_port.in_waiting:
                     try:
+                        # print("waiting")
                         line = self.serial_port.readline()
+                        # print("waiting end")
                         if line:
+                            # print("line : ", line)
                             lines.append(line)
                     except serial.SerialException as e:
                         print("gnss serial exception : ", e, " >> : gnss flag False")
                         for key in self.current_value.keys():
                             self.current_value[key] = None
                         self.flag_gnss = False
+                        time.sleep(1)
                         
-
                     except Exception as e:
+                        
                         print("gnss readline error : ", e) 
                         print("gnss variable line : ", line)  ## must be one value
 
                 try:
                     if len(lines) >=3:
                         line_ = [lines[-2], lines[-1]]
+                        # print("here12")
                     elif len(lines) == 2:
                         line_ = lines
+                        # print("here13")
                     elif len(lines) == 1:
                         line_ = lines
+                        # print("here14")
                     else:
                         # print("empty lines : length : ", len(lines))
                         line_ = ''
 
                     if line_:
+                        # print("here12123")
                         self.add_to_queue(line_)
-                                                
+                                                    
                 except Exception as e:
+                
                     print("gnss in lines check : ", lines, line_)
 
             except Exception as e:
@@ -150,12 +174,12 @@ class serial_gnss:
             decoded_data = data.decode('utf-8').strip()
             
             
-            # current_time = datetime.now()
-            # log_time = current_time.strftime("%m-%d %H:%M:%S") + '.' + str(current_time.microsecond // 100000)
+            current_time = datetime.now()
+            log_time = current_time.strftime("%m-%d %H:%M:%S") + '.' + str(current_time.microsecond // 100000)
             
             '''throttling problem too big data'''
-            # with open("log_gnss_raw.txt", 'a') as file:
-            #     file.write(f"{log_time} : {decoded_data}\n")
+            with open("log_gnss_raw.txt", 'a') as file:
+                file.write(f"{log_time} : {decoded_data}\n")
             
             # print("2. decoded_data : ", decoded_data)
             if not decoded_data.startswith('$'):
@@ -237,8 +261,8 @@ class serial_gnss:
             # filtered_heading = self.apply_low_pass_filter('heading', new_heading)
             # filtered_pitch = self.apply_low_pass_filter('pitch', new_pitch)
 
-            self.current_value['heading'] = round(new_heading, 1)
-            self.current_value['pitch'] = round(new_pitch, 1)
+            self.current_value['heading'] = round(new_heading, 2)
+            self.current_value['pitch'] = round(new_pitch, 2)
 
             self.flag_gnss = True
             self.cnt_process = 0
@@ -251,7 +275,7 @@ class serial_gnss:
             if self.cnt_process >= 5:
                 self.current_value['heading'] = None
                 self.current_value['pitch'] = None
-                print("gnss false here 3")
+                print("gnss false : heading, pitch")
                 self.flag_gnss = False
             
         except Exception as e:

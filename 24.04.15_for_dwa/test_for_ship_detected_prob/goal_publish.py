@@ -36,7 +36,7 @@ class NavigationController:
         self.frame_id = 'map'
         
         # Set up the timer to clear costmaps independently of navigation commands
-        rospy.Timer(rospy.Duration(5), self.clear_costmaps_callback)  # Clears costmaps every 5 seconds
+        # rospy.Timer(rospy.Duration(5), self.clear_costmaps_callback)  # Clears costmaps every 5 seconds
 
     def publish_nav_goal(self):
         self.client.wait_for_server()
@@ -122,7 +122,7 @@ class NavigationController:
     def costmap_updates_callback(self, data):
         if self.boat.flag_stop_update_waypoint:
             self.boat.flag_stop_update_waypoint = False  # 데이터 수신 시 플래그 설정
-        rospy.loginfo("Received costmap update.")
+        # rospy.loginfo("Received costmap update.")
         
     def heading_to_quaternion(self, heading):
         cy = math.cos(heading * 0.5)

@@ -237,7 +237,7 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         # Kd = 0.318
 
         Uf = Kf * self.throttle_component
-        Uf = max(1575 - 1500, min(Uf, 1750 - 1500))
+        Uf = min(Uf, 1750 - 1500)
 
         Ud = Kd * self.roll_component 
         max_diff = 300

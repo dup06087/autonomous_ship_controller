@@ -84,8 +84,9 @@ class PointCloudProcessor:
         if self.pitch == None:
             return pcd
         
-        pitch_rad = np.radians(self.pitch)
-        
+        # print("self.pitch : ", self.pitch)
+        pitch_rad = np.radians(-self.pitch)
+        # print("self.pitch_rad : ", pitch_rad)
         R = np.array([[np.cos(pitch_rad), 0, np.sin(pitch_rad)],
                       [0, 1, 0],
                       [-np.sin(pitch_rad), 0, np.cos(pitch_rad)]])
@@ -110,18 +111,23 @@ class PointCloudProcessor:
 
         pcd = self.rotate_point_cloud_by_pitch(pcd)
         
-        pcd = self.crop_roi(pcd, start=[-100, -100, -0.6], end=[100, 100, 0.3])
-
-        # ship_body_bounds = {'min': [-1.1, -0.51, -0.6], 'max': [1.1, 0.51, 0.1]}  # 선체가 위치하는 영역을 지정
-        ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}  # 선체가 위치하는 영역을 지정
+        # pcd = self.crop_roi(pcd, start=[-10, -10, self.vff_force], end=[15, 15, 0.2])
+        
+        pcd = self.crop_roi(pcd, start=[-100, -100, self.vff_force], end=[100, 100, 0.3])
+        # pcd = self.crop_roi(pcd, start=[-10, -10, -0], end=[15, 15, 0.2])
+        
+        # ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}  # 선체가 위치하는 영역을 지정
+        
+        ship_body_bounds = {'min': [-2, -2, -5], 'max': [2, 2, 5]}  # 선체가 위치하는 영역을 지정
+        
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
         
         # Flatten the z-coordinate to create a 2D point cloud
-        points = np.asarray(pcd.points)
-        points[:, 2] = 0  # Set z values to 0
-        pcd.points = o3d.utility.Vector3dVector(points)
+        # points = np.asarray(pcd.points)
+        # points[:, 2] = 0  # Set z values to 0
+        # pcd.points = o3d.utility.Vector3dVector(points)
         
-        pcd, ind = self.radius_outlier_removal(pcd, nb_points=int(self.dbscan_minpoints), radius=self.dbscan_eps)
+        # pcd, ind = self.radius_outlier_removal(pcd, nb_points=int(self.dbscan_minpoints), radius=self.dbscan_eps)
         
         if len(pcd.points) == 0:
             rospy.logwarn("No points left after filtering")

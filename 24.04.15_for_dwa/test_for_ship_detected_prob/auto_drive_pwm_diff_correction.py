@@ -243,9 +243,38 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         max_diff = 300
         Ud = max(-max_diff, min(Ud, max_diff))
 
-        PWM_right = 1500 + Uf - Ud
-        PWM_left = 1500 + Uf + Ud
+        # PWM_right = 1500 + Uf - Ud
+        # PWM_left = 1500 + Uf + Ud
 
+
+        def thrust(pwm):
+            if pwm < 1500:
+                return (1500 - pwm) * (9.5 / 500)
+            else:
+                return (pwm - 1500) * (11.3 / 500)
+
+        def solve(thrust_target, forward=True):
+            if forward:
+                return 1500 + thrust_target * (500 / 11.3)
+            else:
+                return 1500 - thrust_target * (500 / 9.5)
+
+        if Ud > 0:
+            PWM_right = 1500 + Uf - Ud
+            thrust_right = thrust(PWM_right)
+            thrust_origin = thrust(1500 + Uf)
+            thrust_correction = thrust_origin - thrust_right
+            thrust_left = thrust(1500 + Uf) + thrust_correction
+            PWM_left = solve(thrust_left, forward=thrust_left >= 0)
+        else:
+            PWM_left = 1500 + Uf + Ud
+            thrust_left = thrust(PWM_left)
+            thrust_origin = thrust(1500 + Uf)
+            thrust_correction = thrust_origin - thrust_left
+            thrust_right = thrust(1500 + Uf) + thrust_correction
+            PWM_right = solve(thrust_right, forward=thrust_right >= 0)
+                
+        
         PWM_right = max(1250, min(1750, PWM_right))
         PWM_left = max(1250, min(1750, PWM_left))
 

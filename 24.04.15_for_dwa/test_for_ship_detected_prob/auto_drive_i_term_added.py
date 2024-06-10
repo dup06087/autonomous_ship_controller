@@ -228,6 +228,8 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
             pass
             # angle_diff += 360
             
+        self.integral_angle_diff += angle_diff * dt
+
         self.throttle_component = self.distance_to_waypoint * math.cos(math.radians(angle_diff))
         self.roll_component = self.distance_to_waypoint * math.sin(math.radians(angle_diff))
 
@@ -239,7 +241,7 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         Uf = Kf * self.throttle_component
         Uf = max(1575 - 1500, min(Uf, 1750 - 1500))
 
-        Ud = Kd * self.roll_component 
+        Ud = Kd * self.roll_component + Ki * self.integral_angle_diff
         max_diff = 300
         Ud = max(-max_diff, min(Ud, max_diff))
 

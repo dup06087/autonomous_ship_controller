@@ -15,6 +15,7 @@ from nav_msgs.msg import Path
 
 import signal
 import sys
+from costmap_gps_publisher import GPSPublisher
 
 def signal_handler(sig, frame):
     print('You pressed Ctrl+C!')
@@ -27,7 +28,7 @@ class boat:
         self.current_value = {
             # dest_latitude, dest_longitude : list, connected with pc def start_driving
             'dest_latitude': None, 'dest_longitude': None, 'mode_pc_command': "SELF", 'com_status_send': False, 'com_status_recv': False, 
-            "coeff_kf" : 3.5, "coeff_kd" : 0.6, "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : None,
+            "coeff_kf" : 3.5, "coeff_kd" : 0.6, "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0,
             # pc get params
             'mode_chk': "SELF", 'pwml_chk': None, 'pwmr_chk': None, # nucleo get params
             'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving
@@ -46,7 +47,7 @@ class boat:
         self.lidar_processing_cpy = None
 
         self.gnss_lock = threading.Lock()
-        self.path_publisher = rospy.Publisher("/filtered_global_plan", Path, queue_size=2)
+        # self.path_publisher = rospy.Publisher("/filtered_global_plan", Path, queue_size=2)
 
         # self.obstacle_coordinates = None
 
@@ -104,8 +105,8 @@ class boat:
 
         try:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
-            self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            # self.serial_gnss_cpy = serial_gnss("/dev/pts/8", self.gnss_lock, 1)
+            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/8", self.gnss_lock, 1)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -138,25 +139,6 @@ class boat:
         except Exception as e:
             print("collect data init error : ", e)
     
-    def update_rviz_dest_point(self):
-        try:
-            if self.current_value['mode_pc_command'] == "AUTO":
-                dest_latitude = self.current_value['dest_latitude'][self.current_value["cnt_destination"]]
-                dest_longitude = self.current_value['dest_longitude'][self.current_value["cnt_destination"]]
-                current_latitude = self.current_value['latitude']
-                current_longitude = self.current_value['longitude']
-                heading = self.current_value['heading']
-                distance = self.haversine(current_longitude, current_latitude, dest_longitude, dest_latitude)
-                bearing = self.calculate_bearing(current_longitude, current_latitude, dest_longitude, dest_latitude)
-
-                # Perform coordinate transformation
-                x, y = self.coordinate_transform(distance, bearing, heading)
-                self.lidar_processor.publish_destination_marker(x, -y, 0)
-            else:
-                self.lidar_processor.delete_destination_marker()
-        except Exception as e:
-            pass
-            # print("update rviz destination marker error (maybe some of values are None) : ", e)
 
     
     def update_local_waypoint(self, data):
@@ -188,11 +170,11 @@ class boat:
                     
                     t = time.localtime()    
                     log_time = time.strftime("%H:%M:%S", t)
-                    with open("log_local_planner", "a") as file:
+                    with open("log_global_planner", "a") as file:
                         file.write("{} : {}, {}\n".format(log_time, self.current_value["waypoint_lat_m"], self.current_value["waypoint_lon_m"]))
                     
                     print(f"Updated waypoint: d_lat = {self.current_value['waypoint_lat_m']}, d_lon = {self.current_value['waypoint_lon_m']}")
-                    self.path_publisher.publish(data)
+                    # self.path_publisher.publish(data)
 
                 else:
                     pass
@@ -226,7 +208,6 @@ class boat:
                     self.update_jetson_coeff,
                     # self.update_vff_coeff,
                     self.update_gnss_data,
-                    self.update_rviz_dest_point
             ]
             prev_time_collect_data = time.time()
             while True:
@@ -301,7 +282,18 @@ class boat:
         with self.gnss_lock:
             self.current_value.update(self.serial_gnss_cpy.current_value)
 
+        # GPS 데이터를 업데이트
+        gps_data = {
+            'latitude': self.current_value['latitude'],
+            'longitude': self.current_value['longitude'],
+            'heading': self.current_value['heading']
+        }
+        self.gps_publisher.update_gps_data(gps_data)  # GPS 데이터를 GPSPublisher에 전달
+
         self.send_pitch_to_lidar(pitch = self.current_value['pitch'])
+    
+    
+    
     
     def send_pitch_to_lidar(self, pitch):
         self.lidar_processor.pitch = pitch
@@ -390,8 +382,12 @@ class boat:
         self.nucleo_thread()
         self.collect_data_thread()
         self.pc_socket_thread()
+
         
         self.goal_publishing_thread()
+        self.gps_publisher = GPSPublisher()  # GPSPublisher 인스턴스 생성
+        self.gps_publisher.start()  # GPS 데이터를 publish하는 스레드 시작
+        
         
         self.auto_driving() # block in while
         
