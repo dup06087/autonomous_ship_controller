@@ -3,6 +3,7 @@ import time
 from haversine import haversine
 import math
 import numpy as np
+import os
 
 import rospy
 from std_msgs.msg import Float64
@@ -83,7 +84,8 @@ def auto_drive(self):
                     self.current_value["waypoint_lat_m"] = None
                     self.current_value["waypoint_lon_m"] = None
                     if self.current_value["mode_pc_command"] == "AUTO":
-                        with open('log_flag_stop.txt', 'a') as file:
+                        file_path = os.path.join(self.log_folder_path, "log_flag_stop.txt")
+                        with file_path as file:
                             file.write(f"{self.log_time} : {self.autodrive_output_flag}\n")
                     
                     # cnt_destination still alive

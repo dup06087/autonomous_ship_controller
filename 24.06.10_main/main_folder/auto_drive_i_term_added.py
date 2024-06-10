@@ -10,7 +10,7 @@ from geometry_msgs.msg import PoseStamped
 
 from nav_msgs.msg import Path
 from geographiclib.geodesic import Geodesic
-
+import os
 
 # auto_drive is executing with thread
 def auto_drive(self):
@@ -83,7 +83,8 @@ def auto_drive(self):
                     self.current_value["waypoint_lat_m"] = None
                     self.current_value["waypoint_lon_m"] = None
                     if self.current_value["mode_pc_command"] == "AUTO":
-                        with open('log_flag_stop.txt', 'a') as file:
+                        file_path = os.path.join(self.log_folder_path, "log_flag_stop.txt")
+                        with file_path as file:
                             file.write(f"{self.log_time} : {self.autodrive_output_flag}\n")
                     
                     # cnt_destination still alive
@@ -230,6 +231,10 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
             
         self.integral_angle_diff += angle_diff * dt
 
+        # Anti-windup: limit the integral term
+        integral_max = 300  # Define a suitable maximum value for your integral term
+        self.integral_angle_diff = max(-integral_max, min(self.integral_angle_diff, integral_max))
+            
         self.throttle_component = self.distance_to_waypoint * math.cos(math.radians(angle_diff))
         self.roll_component = self.distance_to_waypoint * math.sin(math.radians(angle_diff))
 
@@ -242,8 +247,6 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         Uf = max(1575 - 1500, min(Uf, 1750 - 1500))
 
         Ud = Kd * self.roll_component + Ki * self.integral_angle_diff
-        max_diff = 300
-        Ud = max(-max_diff, min(Ud, max_diff))
 
         PWM_right = 1500 + Uf - Ud
         PWM_left = 1500 + Uf + Ud

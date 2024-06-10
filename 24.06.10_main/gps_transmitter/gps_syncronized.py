@@ -70,7 +70,6 @@ def listen_to_clock_and_send_gnss():
     rospy.Subscriber("/clock", Clock, clock_callback)
     print("spinning")
     rospy.spin()
-    
 
 if __name__ == '__main__':
     try:
