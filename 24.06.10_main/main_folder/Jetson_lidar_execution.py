@@ -96,7 +96,7 @@ class PointCloudProcessor:
         
         return pcd
     
-    def callback(self, msg):
+    def callback(self, msg):        
         time_diff = rospy.Time.now() - msg.header.stamp
         if time_diff.to_sec() > 0.05: # realtime
             return
@@ -111,14 +111,14 @@ class PointCloudProcessor:
 
         pcd = self.rotate_point_cloud_by_pitch(pcd)
         
-        # pcd = self.crop_roi(pcd, start=[-10, -10, self.vff_force], end=[15, 15, 0.2])
+        # pcd = self.crop_roi(pcd, start=[-100, -100, -10], end=[100,100, 10])
         
-        pcd = self.crop_roi(pcd, start=[-100, -100, self.vff_force], end=[100, 100, 0.3])
+        pcd = self.crop_roi(pcd, start=[-100, -100, self.vff_force], end=[100, 100, 0.2])
         # pcd = self.crop_roi(pcd, start=[-10, -10, -0], end=[15, 15, 0.2])
         
-        # ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}  # 선체가 위치하는 영역을 지정
+        ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}  # 선체가 위치하는 영역을 지정
         
-        ship_body_bounds = {'min': [-2, -2, -5], 'max': [2, 2, 5]}  # 선체가 위치하는 영역을 지정
+        # ship_body_bounds = {'min': [-2, -2, -5], 'max': [2, 2, 5]}  # 선체가 위치하는 영역을 지정
         
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
         
@@ -148,7 +148,7 @@ class PointCloudProcessor:
         # processed_msg = ros_np.array_to_pointcloud2(points, header)
 
         self.pub.publish(points_xyz)
-
+        
     def run(self):
         rospy.spin()
 

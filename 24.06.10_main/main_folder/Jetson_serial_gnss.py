@@ -88,14 +88,14 @@ class serial_gnss:
         waiting = False
         while self.running:
             try:
-                time.sleep(0.2)  # '''time control'''
+                time.sleep(0.15)  # '''time control'''
                 lines = []
                 
-                if not self.serial_port.is_open:
-                    time.sleep(1)  # Wait before retrying
-                    self.connect_serial()
-                    print("restart gnss serial connection")
-                    continue
+                # if not self.serial_port.is_open:
+                #     time.sleep(1)  # Wait before retrying
+                #     self.connect_serial()
+                #     print("restart gnss serial connection")
+                #     continue
                 
                 while self.serial_port.in_waiting:
                     try:
@@ -149,7 +149,7 @@ class serial_gnss:
         while self.running:
             try:
                 # print("gnss error cnt : ", self.cnt_receive, self.cnt_process, self.flag_gnss)
-                time.sleep(0.2)     #'''time control'''
+                time.sleep(0.15)     #'''time control'''
                 data = self.get_from_queue()
                 # print("1. gnss data : ", data)
                 if data:
@@ -159,7 +159,7 @@ class serial_gnss:
                 else:
                     count_alive += 1
                     if count_alive >= 6:
-                        print("gnss false here1, cnt : ", count_alive)
+                        print("gnss no data error, cnt : ", count_alive)
                         self.flag_gnss = False
                     else:
                         self.flag_gnss = True

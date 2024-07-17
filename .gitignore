@@ -5,3 +5,4 @@ close_serial.txt
 log_global_planner
 log_local_planner
 *.ply
+close_serial.txt

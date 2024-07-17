@@ -33,7 +33,9 @@ def auto_drive(self):
 
     # 웨이포인트를 받기 위한 구독자 설정 (토픽 이름과 메시지 유형은 예시일 뿐 실제 프로젝트에서 확인 필요)
     # rospy.Subscriber("/move_base/DWAPlannerROS/local_plan", Path, self.update_local_waypoint)
-    rospy.Subscriber("/move_base/DWAPlannerROS/global_plan", Path, self.update_global_waypoint)
+    # rospy.Subscriber("/move_base/DWAPlannerROS/global_plan", Path, self.update_global_waypoint)
+    rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.update_global_waypoint)
+
     rospy.Timer(rospy.Duration(1), self.check_global_waypoint_timeout)
 
     last_print_time = time.time()  # 占쏙옙占쏙옙占쏙옙占쏙옙占쏙옙 占쏙옙占쏙옙占?占시곤옙 占십깍옙화
@@ -57,6 +59,7 @@ def auto_drive(self):
                 self.current_value["cnt_destination"] = self.cnt_destination
                 destination_latitude = []
                 destination_longitude = []
+                self.integral_ud = 0
 
                 flag_arrived = False
             try:
@@ -70,6 +73,7 @@ def auto_drive(self):
                 current_heading = self.current_value["heading"]
                 
                 if destination_latitude != prev_destination_latitude or destination_longitude != prev_destination_longitude: # arrived, new_destination_arrived
+                    self.integral_ud = 0
                     self.cnt_destination = 0
                     self.current_value["cnt_destination"] = self.cnt_destination
                     prev_destination_latitude = destination_latitude
@@ -83,6 +87,7 @@ def auto_drive(self):
                     self.current_value["pwmr_auto"] = 1500
                     self.current_value["waypoint_lat_m"] = None
                     self.current_value["waypoint_lon_m"] = None
+                    self.integral_ud = 0
                     if self.current_value["mode_pc_command"] == "AUTO":
                         file_path = os.path.join(self.log_folder_path, "log_flag_stop.txt")
                         with file_path as file:
@@ -124,6 +129,7 @@ def auto_drive(self):
                         self.current_value["waypoint_longitude"] = adjusted_target_lon
                         calculate_pwm_auto(self, current_latitude, current_longitude, float(adjusted_target_lat), float(adjusted_target_lon), current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
                     except Exception as e:
+                        
                         print("error 4 : ", e)
                     t = time.localtime()    
                     log_time = time.strftime("%H:%M:%S", t)
@@ -144,9 +150,11 @@ def auto_drive(self):
                         
                         self.cnt_destination += 1
                         self.current_value['cnt_destination'] = self.cnt_destination
-                        
+                        self.integral_ud = 0
+
                         if self.cnt_destination >= len(self.current_value['dest_latitude']):
                             # print("where is the prob3")
+
                             self.cnt_destination = 0
                             self.current_value['cnt_destination'] = self.cnt_destination
                             
@@ -168,6 +176,7 @@ def auto_drive(self):
                             flag_arrived = True
                             self.current_value["arrived"] = True
                             continue 
+        
                 except Exception as e:
                     print('error here 2 : ', e)
                     
@@ -179,6 +188,8 @@ def auto_drive(self):
                     except :
                         print("NOOOOOp")
 
+
+                    
             # print("auto drive end")
             time.sleep(0.2)
 
@@ -211,9 +222,21 @@ def convert_metric_to_latlon(base_lat, base_lon, distance_x, distance_y, current
     # 계산된 목표 위치의 위경도 반환
     return (result['lat2'], result['lon2'])
 
-def calculate_pwm_auto(self, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading, Kf = 2.5, Kd = 0.318, Ki = 0.1, dt = 1):
+
+def thrust(pwm):
+    if pwm < 1500:
+        return (1500 - pwm) * (9.5 / 500) * -1  # 음의 추진력
+    else:
+        return (pwm - 1500) * (11.3 / 500)     # 양의 추진력
+
+def solve(thrust_target, forward=True):
+    if forward:
+        return 1500 + thrust_target * (500 / 11.3)
+    else:
+        return 1500 - thrust_target * (500 / 9.5)
+    
+def calculate_pwm_auto(self, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading, Kf = 2.5, Kd = 0.318, Ki = 0.1, dt = 0.01):
     try:
-       
         if current_heading > 180:
             current_heading = current_heading - 360
                 
@@ -233,50 +256,31 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         self.throttle_component = self.distance_to_waypoint * math.cos(math.radians(angle_diff))
         self.roll_component = self.distance_to_waypoint * math.sin(math.radians(angle_diff))
 
-        # print("throttle, roll : ",s/elf.throttle_component, self.roll_component)
-        # Kf = 2.5
-        # # Kd = 0.25 * 800 / (2 * math.pi * 100)
-        # Kd = 0.318
+        Ud = Kd * self.roll_component 
+        self.integral_ud += Ud * dt
+        integral_max = 100  # Define a suitable maximum value for your integral term
+        self.integral_ud = max(-integral_max, min(self.integral_ud, integral_max))
+      
+        Ud_total = Ud + Ki * self.integral_ud
 
         Uf = Kf * self.throttle_component
-        Uf = max(1575 - 1500, min(Uf, 1750 - 1500))
+        Uf = min(Uf, 1750 - 1500)
 
-        Ud = Kd * self.roll_component 
-        max_diff = 300
-        Ud = max(-max_diff, min(Ud, max_diff))
-
-        # PWM_right = 1500 + Uf - Ud
-        # PWM_left = 1500 + Uf + Ud
-
-
-        def thrust(pwm):
-            if pwm < 1500:
-                return (1500 - pwm) * (9.5 / 500)
-            else:
-                return (pwm - 1500) * (11.3 / 500)
-
-        def solve(thrust_target, forward=True):
-            if forward:
-                return 1500 + thrust_target * (500 / 11.3)
-            else:
-                return 1500 - thrust_target * (500 / 9.5)
-
-        if Ud > 0:
-            PWM_right = 1500 + Uf - Ud
+        if Ud_total > 0:
+            PWM_right = 1500 + Uf - Ud_total
             thrust_right = thrust(PWM_right)
             thrust_origin = thrust(1500 + Uf)
             thrust_correction = thrust_origin - thrust_right
             thrust_left = thrust(1500 + Uf) + thrust_correction
             PWM_left = solve(thrust_left, forward=thrust_left >= 0)
         else:
-            PWM_left = 1500 + Uf + Ud
+            PWM_left = 1500 + Uf + Ud_total
             thrust_left = thrust(PWM_left)
             thrust_origin = thrust(1500 + Uf)
             thrust_correction = thrust_origin - thrust_left
             thrust_right = thrust(1500 + Uf) + thrust_correction
             PWM_right = solve(thrust_right, forward=thrust_right >= 0)
-                
-        
+
         PWM_right = max(1250, min(1750, PWM_right))
         PWM_left = max(1250, min(1750, PWM_left))
 

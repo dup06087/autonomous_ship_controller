@@ -14,8 +14,8 @@ baudrate = 115200
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_stay_start_point.txt' # sh 실행시
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_heading_diff_3.txt' # sh 실행시
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_heading_45.txt' # sh 실행시
-# gps_data_file = "/home/ices/Desktop/python_code/code/log/2024/06-25/one_cycle_success_1913/log_gnss_raw.txt"
-gps_data_file = "/home/ices/Desktop/python_code/code/24.06.10_main/gps_transmitter/test_pitch_45.txt"
+gps_data_file = "/home/ices/Desktop/python_code/code/log_for_test/test_for_hard_part_1913/log_gnss_raw.txt"
+
 # gps_data_file = '/home/ices/Desktop/python_code/code/log_for_test/corn_front/log_gnss_raw.txt' # sh 실행시
 
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_latitude_changing.txt' # sh 실행시
@@ -24,6 +24,7 @@ gps_data_file = "/home/ices/Desktop/python_code/code/24.06.10_main/gps_transmitt
 # 시리얼 포트 초기화
 ser = serial.Serial(port, baudrate)
 
+           
 try:
     with open(gps_data_file, 'r') as file:
         while True:
@@ -33,8 +34,16 @@ try:
 
                 # 두 줄의 데이터를 시리얼 포트를 통해 송신
                 for line in lines:
-                    ser.write(line.encode() + b'\n')
-                    print(f"Sent data: {line}")
+                    first_colon_index = line.find(':')
+                    
+                    second_colon_index = line.find(':', first_colon_index + 1)
+                    third_colon_index = line.find(':', second_colon_index + 1)
+                    
+                    # 3번째 ':' 이후의 부분을 추출
+                    line_ = line[third_colon_index + 2:].strip()  # 3번째 ':' 이후부터 라인의 끝까지
+                
+                    ser.write(line_ .encode() + b'\n')
+                    print(f"Sent data: {line_ }")
 
                 # 1초 대기
                 time.sleep(0.2)

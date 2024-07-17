@@ -8,6 +8,7 @@ from std_srvs.srv import Empty
 import math, time
 from nav_msgs.msg import OccupancyGrid
 from map_msgs.msg import OccupancyGridUpdate
+from std_msgs.msg import Int32  # 토픽에서 Int32 메시지를 수신하기 위한 임포트
 
 class NavigationController:
     def __init__(self, boat_instance):
@@ -16,18 +17,26 @@ class NavigationController:
         self.pub_goal = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
         self.pub_cancel = rospy.Publisher('/move_base/cancel', GoalID, queue_size=10)
         self.clear_costmaps_service = rospy.ServiceProxy('/move_base/clear_costmaps', Empty)
-        # self.costmap_updates_subscriber = rospy.Subscriber(
+        
+        # self.costmap_subscriber = rospy.Subscriber(
         #     "/move_base/global_costmap/costmap", 
         #     OccupancyGrid, 
-        #     self.costmap_updates_callback
-        # )
+        #     self.costmap_callback
+        # ) # no need
         
         self.costmap_updates_subscriber = rospy.Subscriber(
             "/move_base/global_costmap/costmap_updates", 
             OccupancyGridUpdate, 
             self.costmap_updates_callback
         )
-                
+
+        # /move_base/global_costmap/inflation_layer/inflated_costmap_value 토픽 구독
+        self.costmap_value_subscriber = rospy.Subscriber(
+            "/move_base/global_costmap/inflation_layer/inflated_costmap_value",
+            Int32,
+            self.costmap_value_callback
+        )
+        
         self.current_lat = 0.0
         self.current_lon = 0.0
         self.goal_lat = 0.0
@@ -35,9 +44,28 @@ class NavigationController:
         self.heading = 0.0
         self.frame_id = 'map'
         
+        self.costmap = None
+        self.resolution = None
+        self.origin_x = None
+        self.origin_y = None
+        self.costmap_value = None  # 수신된 costmap_value 저장 변수
+ 
         # Set up the timer to clear costmaps independently of navigation commands
         # rospy.Timer(rospy.Duration(5), self.clear_costmaps_callback)  # Clears costmaps every 5 seconds
 
+    def costmap_value_callback(self, msg):
+        self.costmap_value = msg.data
+        self.boat.current_value['obstacle_cost'] = self.costmap_value
+        # print("costmap value : ", self.costmap_value)
+        # rospy.loginfo(f"Received costmap value: {self.costmap_value}")
+        
+    # def costmap_callback(self, data):
+    #     self.costmap = data.data
+    #     self.resolution = data.info.resolution
+    #     self.origin_x = data.info.origin.position.x
+    #     self.origin_y = data.info.origin.position.y
+    #     # print("{}, {}, {}, {}".format(self.costmap, self.resolution, self.origin_x, self.origin_y))
+        
     def publish_nav_goal(self):
         self.client.wait_for_server()
         time_prev = time.time()
@@ -46,6 +74,7 @@ class NavigationController:
         while not rospy.is_shutdown():  # 외부 루프
             try:
                 if self.boat.current_value['flag_autodrive']:
+
                     counter_false_autodrive = 0  # Reset counter if autodrive is true
 
                     # print("goal publsihing")
@@ -87,8 +116,8 @@ class NavigationController:
                         continue
                     
                     self.pub_goal.publish(goal)
-                    print("Goal published: Position - ({}, {}), Orientation - {}".format(dx, dy, quaternion))
-                    rospy.sleep(1)
+                    # print("Goal published: Position - ({}, {}), Orientation - {}".format(dx, dy, quaternion))
+                    rospy.sleep(0.2)
                     
                 else:
                     # 목표지점까지 취소하는것 : 이것은 flag autodrive보다도 엄격히 적용
@@ -107,22 +136,22 @@ class NavigationController:
         cancel_msg = GoalID()
         self.client.cancel_goal()
         self.pub_cancel.publish(cancel_msg)
-        print("All goals canceled.")
+        # print("All goals canceled.")
 
-    def clear_costmaps_callback(self, event):
-        try:
-            self.boat.flag_stop_update_waypoint = True
-            self.clear_costmaps_service()
-            rospy.loginfo("Costmaps cleared successfully(per second).")
-        except rospy.ServiceException as e:
-            rospy.logerr("Service call failed: %s", e)
-        except Exception as e:
-            print("clear costmap callback : ", e)
+    # def clear_costmaps_callback(self, event):
+    #     try:
+    #         self.boat.flag_stop_update_waypoint = True
+    #         self.clear_costmaps_service()
+    #         rospy.loginfo("Costmaps cleared successfully(per second).")
+    #     except rospy.ServiceException as e:
+    #         rospy.logerr("Service call failed: %s", e)
+    #     except Exception as e:
+    #         print("clear costmap callback : ", e)
         
     def costmap_updates_callback(self, data):
         if self.boat.flag_stop_update_waypoint:
             self.boat.flag_stop_update_waypoint = False  # 데이터 수신 시 플래그 설정
-        # rospy.loginfo("Received costmap update.")
+
         
     def heading_to_quaternion(self, heading):
         cy = math.cos(heading * 0.5)
@@ -130,7 +159,6 @@ class NavigationController:
         return (0, 0, sy, cy)
 
     def get_relative_position(self, current_lat, current_lon, goal_lat, goal_lon, heading):
-        import math
         R = 6371000  # 지구 반경 (미터 단위)
         phi1 = math.radians(current_lat)
         phi2 = math.radians(goal_lat)

@@ -49,3 +49,6 @@ def initialize_variables(self):
         'longitude': None,
         'heading': None
     }
+
+    self.integral_ud = 0
+    self.prev_roll_component = None

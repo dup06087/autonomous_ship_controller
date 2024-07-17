@@ -30,9 +30,10 @@ def auto_drive(self):
     self.waypoint_latitude = 0.0
     self.waypoint_longitude = 0.0
 
-    # 웨이포인트를 받기 위한 구독자 설정 (토픽 이름과 메시지 유형은 예시일 뿐 실제 프로젝트에서 확인 필요)
     # rospy.Subscriber("/move_base/DWAPlannerROS/local_plan", Path, self.update_local_waypoint)
-    rospy.Subscriber("/move_base/DWAPlannerROS/global_plan", Path, self.update_global_waypoint)
+    # rospy.Subscriber("/move_base/DWAPlannerROS/global_plan", Path, self.update_global_waypoint)
+    rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.update_global_waypoint)
+    print("globalplanner subscribing")
     rospy.Timer(rospy.Duration(1), self.check_global_waypoint_timeout)
 
     last_print_time = time.time()  # 占쏙옙占쏙옙占쏙옙占쏙옙占쏙옙 占쏙옙占쏙옙占?占시곤옙 占십깍옙화
@@ -96,7 +97,7 @@ def auto_drive(self):
                     
                     time.sleep(0.2)
             except Exception as e:
-                print("error here : ", e)
+                print("error auto drive : ", e)
                 
             else: ### ready to auto drive
                 try:
@@ -229,14 +230,9 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         elif angle_diff < -180:
             pass
             # angle_diff += 360
-            
+                    
         self.throttle_component = self.distance_to_waypoint * math.cos(math.radians(angle_diff))
         self.roll_component = self.distance_to_waypoint * math.sin(math.radians(angle_diff))
-
-        # print("throttle, roll : ",s/elf.throttle_component, self.roll_component)
-        # Kf = 2.5
-        # # Kd = 0.25 * 800 / (2 * math.pi * 100)
-        # Kd = 0.318
 
         Uf = Kf * self.throttle_component
         Uf = max(1575 - 1500, min(Uf, 1750 - 1500))
@@ -247,7 +243,7 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
 
         PWM_right = 1500 + Uf - Ud
         PWM_left = 1500 + Uf + Ud
-
+        
         PWM_right = max(1250, min(1750, PWM_right))
         PWM_left = max(1250, min(1750, PWM_left))
 

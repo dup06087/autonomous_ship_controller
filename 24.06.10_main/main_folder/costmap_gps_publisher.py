@@ -3,6 +3,7 @@
 import rospy
 import threading
 from obstacle_layer_odom_filter.msg import gps_data  # 사용자 정의 메시지 임포트
+import time
 
 class GPSPublisher:
     def __init__(self):
@@ -32,6 +33,7 @@ class GPSPublisher:
                     # rospy.loginfo("Published GPS data: %s", gps_msg)
             rate.sleep()
 
+            
     def start(self):
         publish_thread = threading.Thread(target=self.publish_gps_data)
         publish_thread.start()

@@ -4,8 +4,11 @@ from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
 from Jetson_lidar_execution import PointCloudProcessor
+# from prac_ICP import ICPTest
 
-from auto_drive import auto_drive
+# from auto_drive import auto_drive
+from auto_drive_PID import auto_drive
+# from auto_drive_pwm_diff_correction import auto_drive
 from goal_publish import NavigationController
 from datetime import datetime
 
@@ -37,7 +40,7 @@ class boat:
             "waypoint_lat_m" : None, "waypoint_lon_m" : None,
             # gnss get params below
             'velocity': None, 'heading': 0, 'roll': None, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None,
-            "longitude": 127.077618, "latitude": 37.633173,
+            "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0,
             "arrived" : False, "flag_autodrive" : False
             # gnss end
             } # cf. com_status undefined
@@ -124,9 +127,10 @@ class boat:
         self.serial_gnss_cpy_thread = None
 
         try:
-            # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0")
-            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/8", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
+            # sudo chmod a+rw /dev/ttyACM0
+            # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
+            # self.serial_gnss_cpy = serial_gnss("/dev/pts/10", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -141,6 +145,20 @@ class boat:
         
         except Exception as e:
             print("nucleo error : ", e)
+
+    # def ICP_thread(self):
+    #     try:
+    #         self.icp_test_cpy = ICPTest(self)
+    #         self.icp_test_cpy_thread = threading.Thread(target=self.icp_test_cpy.run)
+    #         self.icp_test_cpy_thread.start()
+    #     except Exception as e:
+    #         print(f"Exception in nucleo_thread: {e}")
+        
+    #     except Exception as e:
+    #         print("nucleo error : ", e)
+            
+        
+
 
 
     def pc_socket_thread(self):
@@ -158,8 +176,6 @@ class boat:
             self.collecting_data_thread.start()
         except Exception as e:
             print("collect data init error : ", e)
-    
-
     
     def update_local_waypoint(self, data):
         try:
@@ -182,11 +198,15 @@ class boat:
     def update_global_waypoint(self, data):
         try:
             if not self.flag_stop_update_waypoint:
-                if data.poses :
+                if data.poses:
                     self.last_received_time = data.header.stamp.to_sec()
 
                     # print("globaldata : \n", data)
-                    last_pose = data.poses[5]
+                    try:
+                        last_pose = data.poses[10]
+                    except:
+                        last_pose = data.poses[-1]
+                        
                     self.current_value["waypoint_lat_m"] = round(float(last_pose.pose.position.x), 2)
                     self.current_value["waypoint_lon_m"] = round(float(last_pose.pose.position.y), 2)
                     
@@ -246,14 +266,14 @@ class boat:
                 # print("collected current value : ", self.current_value)
                 
                 ''' current value logger '''
-                print('log_current value doing??')
+                # print('log_current value doing??')
                 current_time = datetime.now()
                 log_time = current_time.strftime("%m-%d %H:%M:%S") + '.' + str(current_time.microsecond // 100000)
                 file_path = os.path.join(self.log_folder_path, "log_current_value.txt")
 
                 with open(file_path, 'a') as file:
                     file.write(f"{log_time} : {self.current_value}\n")
-                    print("done?")
+                    # print("done?")
                 time.sleep(0.2)
                 
         except Exception as e:
@@ -403,6 +423,7 @@ class boat:
         self.lidar_thread()
         self.gnss_thread()
         self.nucleo_thread()
+        # self.ICP_thread()
         self.collect_data_thread()
         self.pc_socket_thread()
 
