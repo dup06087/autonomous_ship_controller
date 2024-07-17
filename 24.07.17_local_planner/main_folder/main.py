@@ -4,7 +4,7 @@ from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
 from Jetson_lidar_execution import PointCloudProcessor
-from prac_ICP import ICPTest
+# from prac_ICP import ICPTest
 
 # from auto_drive import auto_drive
 from auto_drive_PID import auto_drive
@@ -146,16 +146,16 @@ class boat:
         except Exception as e:
             print("nucleo error : ", e)
 
-    def ICP_thread(self):
-        try:
-            self.icp_test_cpy = ICPTest(self)
-            self.icp_test_cpy_thread = threading.Thread(target=self.icp_test_cpy.run)
-            self.icp_test_cpy_thread.start()
-        except Exception as e:
-            print(f"Exception in nucleo_thread: {e}")
+    # def ICP_thread(self):
+    #     try:
+    #         self.icp_test_cpy = ICPTest(self)
+    #         self.icp_test_cpy_thread = threading.Thread(target=self.icp_test_cpy.run)
+    #         self.icp_test_cpy_thread.start()
+    #     except Exception as e:
+    #         print(f"Exception in nucleo_thread: {e}")
         
-        except Exception as e:
-            print("nucleo error : ", e)
+    #     except Exception as e:
+    #         print("nucleo error : ", e)
             
         
 
@@ -423,7 +423,7 @@ class boat:
         self.lidar_thread()
         self.gnss_thread()
         self.nucleo_thread()
-        self.ICP_thread()
+        # self.ICP_thread()
         self.collect_data_thread()
         self.pc_socket_thread()
 

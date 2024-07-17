@@ -31,8 +31,6 @@ class ICPTest:
             'pitch': None
         }
 
-        self.flag_execute = False
-
         # Start the thread to update the current values
         self.update_thread = threading.Thread(target=self.update_values)
         self.update_thread.daemon = True
@@ -52,20 +50,12 @@ class ICPTest:
     def lidar_callback(self, data):
         # Check if the timestamp is too old
         time_diff = rospy.Time.now() - data.header.stamp
-        if time_diff.to_sec() > 0.05:  # Adjust this threshold as needed
+        if time_diff.to_sec() > 0.1:  # Adjust this threshold as needed
             rospy.logwarn("Dropping old point cloud data")
             return
         try:
             # print("lidar callback in try")
             # Check if any required value is None in mother_instance.current_value
-            if not self.flag_execute:
-                self.prev_scan = None
-                self.current_heading = 0
-                self.current_x = 0
-                self.current_y = 0
-                self.current_z = 0
-                return
-            
             if any(self.mother_instance.current_value[key] is None for key in ['latitude', 'longitude', 'heading', 'pitch']): # 뭐라도 None이면 실행
                 # print("None")
                 cloud = self.point_cloud2_to_o3d(data)
@@ -74,11 +64,11 @@ class ICPTest:
                     # print("in the if")
                     # Perform ICP
                     reg_p2p = o3d.pipelines.registration.registration_icp(
-                        cloud, self.prev_scan, 0.5,
+                        cloud, self.prev_scan, 0.2,
                         np.identity(4),
                         o3d.pipelines.registration.TransformationEstimationPointToPoint())
                     transf = reg_p2p.transformation
-                    if reg_p2p.fitness > 0.8:  # Check fitness score
+                    if reg_p2p.fitness > 0.5:  # Check fitness score
                         
                         translation = transf[:3, 3]
                         rotation_matrix = transf[:3, :3]
@@ -112,14 +102,11 @@ class ICPTest:
                             )
                             self.prev_value['latitude'] = lat
                             self.prev_value['longitude'] = lon
-                            self.prev_value['heading'] = self.current_heading
+
                             self.mother_instance.current_value['latitude'] = lat
                             self.mother_instance.current_value['longitude'] = lon
                             self.mother_instance.current_value['heading'] = self.current_heading
                             # print("end if2")
-                    else: 
-                        return # don't update if fitness is not enough and leave the prev_scan value
-                    
                 self.prev_scan = cloud
                 print("end lidar callback")
             else:
@@ -128,10 +115,9 @@ class ICPTest:
                 self.current_x = 0
                 self.current_y = 0
                 self.current_z = 0
-
+                
         except Exception as e:
             print('lidar callback error : ', e)
-            self.mother_instance.serial_gnss_cpy.flag_gnss = False
             
     def calculate_new_position(self, lat, lon, delta_x, delta_y, heading):
         # Convert degrees to radians
