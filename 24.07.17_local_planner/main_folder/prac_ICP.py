@@ -7,6 +7,7 @@ import numpy as np
 import open3d as o3d
 import threading
 import math
+import time
 
 class ICPTest:
     def __init__(self, mother_instance):
@@ -31,6 +32,8 @@ class ICPTest:
             'pitch': None
         }
 
+        self.flag_execute = False
+
         # Start the thread to update the current values
         self.update_thread = threading.Thread(target=self.update_values)
         self.update_thread.daemon = True
@@ -43,89 +46,104 @@ class ICPTest:
         rate = rospy.Rate(5)  # 0.2 seconds
         while not rospy.is_shutdown():
             for key in ['latitude', 'longitude', 'heading', 'pitch']:
-                if self.mother_instance.current_value[key] is not None:
+                if not self.flag_execute:
                     self.prev_value[key] = self.mother_instance.current_value[key]
             rate.sleep()
 
     def lidar_callback(self, data):
+        prev_time = time.time()
         # Check if the timestamp is too old
         time_diff = rospy.Time.now() - data.header.stamp
-        if time_diff.to_sec() > 0.1:  # Adjust this threshold as needed
+        if time_diff.to_sec() > 0.05:  # Adjust this threshold as needed
             rospy.logwarn("Dropping old point cloud data")
             return
         try:
-            # print("lidar callback in try")
             # Check if any required value is None in mother_instance.current_value
-            if any(self.mother_instance.current_value[key] is None for key in ['latitude', 'longitude', 'heading', 'pitch']): # 뭐라도 None이면 실행
-                # print("None")
+            if not self.flag_execute:
+                self.prev_scan = None
+                self.current_heading = self.mother_instance.current_value['heading']
+                self.current_x = 0
+                self.current_y = 0
+                self.current_z = 0
+                return
+            
+            else:
                 cloud = self.point_cloud2_to_o3d(data)
                 # cloud = self.downsample(cloud)
                 if self.prev_scan is not None:
-                    # print("in the if")
                     # Perform ICP
                     reg_p2p = o3d.pipelines.registration.registration_icp(
-                        cloud, self.prev_scan, 0.2,
+                        cloud, self.prev_scan, 0.5,
                         np.identity(4),
                         o3d.pipelines.registration.TransformationEstimationPointToPoint())
                     transf = reg_p2p.transformation
-                    if reg_p2p.fitness > 0.5:  # Check fitness score
+                    # print("fitness : ",  reg_p2p.fitness)
+                    if reg_p2p.fitness > 0.8:  # Check fitness score
+                        self.current_x = 0
+                        self.current_y = 0
+                        self.current_z = 0
                         
                         translation = transf[:3, 3]
                         rotation_matrix = transf[:3, :3]
                         rotation_euler = self.rotation_matrix_to_euler(rotation_matrix)
-
                         # Update heading
                         heading_change = np.degrees(rotation_euler[2])  # Yaw change in degrees
-                        self.current_heading += heading_change
+                        print("heading change : ", heading_change)
+                        self.current_heading = self.prev_value['heading'] + heading_change
                         self.current_heading = self.current_heading % 360  # Normalize heading to [0, 360)
-
                         # Calculate distance moved
                         self.current_x += translation[0]
                         self.current_y += translation[1]
                         self.current_z += translation[2]
-
                         # Print current position and heading
                         # rospy.loginfo(f"Current Position: x={self.current_x}, y={self.current_y}, z={self.current_z}")
                         # rospy.loginfo(f"Current Heading: {self.current_heading} degrees")
 
-                        # self.log_file.write(f"{rospy.Time.now().to_sec()}, {self.current_x}, {self.current_y}, {self.current_z}, {self.current_heading}\n")
+                        self.log_file.write(f"{rospy.Time.now().to_sec()}, {self.current_x}, {self.current_y}, {self.current_z}, {heading_change}, {self.current_heading}\n")
 
                         # Update mother_instance's current_value directly using ICP results
-                        if self.prev_value['latitude'] is None or self.prev_value['longitude'] is None or self.prev_value['pitch'] is None or self.prev_value['heading'] is None:
-                            # print("in the if 2")
-                            lat, lon = self.calculate_new_position(
-                                self.prev_value['latitude'],
-                                self.prev_value['longitude'],
-                                self.current_x,
-                                self.current_y,
-                                self.prev_value['heading']
-                            )
-                            self.prev_value['latitude'] = lat
-                            self.prev_value['longitude'] = lon
-
-                            self.mother_instance.current_value['latitude'] = lat
-                            self.mother_instance.current_value['longitude'] = lon
-                            self.mother_instance.current_value['heading'] = self.current_heading
-                            # print("end if2")
+                        # if self.prev_value['latitude'] is None or self.prev_value['longitude'] is None or self.prev_value['pitch'] is None or self.prev_value['heading'] is None:
+                        lat, lon = self.calculate_new_position(
+                            self.prev_value['latitude'],
+                            self.prev_value['longitude'],
+                            self.current_x,
+                            self.current_y,
+                            self.prev_value['heading']
+                        )
+                        
+                        self.prev_value['latitude'] = round(lat, 8)
+                        self.prev_value['longitude'] = round(lon, 8)
+                        self.prev_value['heading'] = round(self.current_heading, 2)
+                        
+                        self.mother_instance.current_value['latitude'] = round(lat, 8)
+                        self.mother_instance.current_value['longitude'] = round(lon, 8)
+                        self.mother_instance.current_value['heading'] = round(self.current_heading, 2)
+                        
+                        self.mother_instance.serial_gnss_cpy.current_value['latitude'] = round(lat, 8)
+                        self.mother_instance.serial_gnss_cpy.current_value['longitude'] = round(lon, 8)
+                        self.mother_instance.serial_gnss_cpy.current_value['heading'] = round(self.current_heading, 2)
+                        
+                        # print("ICP value : lat = {}, lon = {}".format(lat, lon))
+                    else: 
+                        print("fitness low")
+                        # return # don't update if fitness is not enough and leave the prev_scan value
+                    
                 self.prev_scan = cloud
-                print("end lidar callback")
-            else:
-                self.prev_scan = None
-                self.current_heading = 0
-                self.current_x = 0
-                self.current_y = 0
-                self.current_z = 0
-                
+                # print("end lidar callback")
+        
         except Exception as e:
             print('lidar callback error : ', e)
+            self.mother_instance.serial_gnss_cpy.flag_gnss = False
+        
+        # print("ICP time consuming : ", time.time()-prev_time)
             
     def calculate_new_position(self, lat, lon, delta_x, delta_y, heading):
         # Convert degrees to radians
         heading_rad = math.radians(heading)
 
         # Calculate the change in position
-        delta_north = delta_x * math.cos(heading_rad) - delta_y * math.sin(heading_rad)
-        delta_east = delta_x * math.sin(heading_rad) + delta_y * math.cos(heading_rad)
+        delta_north = delta_x * math.sin(heading_rad) - delta_y * math.cos(heading_rad)
+        delta_east = delta_x * math.cos(heading_rad) + delta_y * math.sin(heading_rad)
 
         # Earth radius in meters
         R = 6378137.0

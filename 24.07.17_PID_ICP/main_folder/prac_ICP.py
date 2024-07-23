@@ -13,7 +13,8 @@ class ICPTest:
         # rospy.init_node('icp_test')
         self.prev_scan = None
         self.mother_instance = mother_instance
-        self.sub_lidar = rospy.Subscriber('/processed_pointcloud', PointCloud2, self.lidar_callback)
+        # self.sub_lidar = rospy.Subscriber('/processed_pointcloud', PointCloud2, self.lidar_callback)
+        self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback)
         
         # Initial position and heading
         self.current_x = 0.0
@@ -79,21 +80,21 @@ class ICPTest:
                         o3d.pipelines.registration.TransformationEstimationPointToPoint())
                     transf = reg_p2p.transformation
                     if reg_p2p.fitness > 0.8:  # Check fitness score
-                        
+                        print("error 1 ")
                         translation = transf[:3, 3]
                         rotation_matrix = transf[:3, :3]
                         rotation_euler = self.rotation_matrix_to_euler(rotation_matrix)
-
+                        print("error 2 ")
                         # Update heading
                         heading_change = np.degrees(rotation_euler[2])  # Yaw change in degrees
                         self.current_heading += heading_change
                         self.current_heading = self.current_heading % 360  # Normalize heading to [0, 360)
-
+                        print("error 3 ")
                         # Calculate distance moved
                         self.current_x += translation[0]
                         self.current_y += translation[1]
                         self.current_z += translation[2]
-
+                        print("error 4 ")
                         # Print current position and heading
                         # rospy.loginfo(f"Current Position: x={self.current_x}, y={self.current_y}, z={self.current_z}")
                         # rospy.loginfo(f"Current Heading: {self.current_heading} degrees")
@@ -101,22 +102,24 @@ class ICPTest:
                         # self.log_file.write(f"{rospy.Time.now().to_sec()}, {self.current_x}, {self.current_y}, {self.current_z}, {self.current_heading}\n")
 
                         # Update mother_instance's current_value directly using ICP results
-                        if self.prev_value['latitude'] is None or self.prev_value['longitude'] is None or self.prev_value['pitch'] is None or self.prev_value['heading'] is None:
-                            # print("in the if 2")
-                            lat, lon = self.calculate_new_position(
-                                self.prev_value['latitude'],
-                                self.prev_value['longitude'],
-                                self.current_x,
-                                self.current_y,
-                                self.prev_value['heading']
-                            )
-                            self.prev_value['latitude'] = lat
-                            self.prev_value['longitude'] = lon
-                            self.prev_value['heading'] = self.current_heading
-                            self.mother_instance.current_value['latitude'] = lat
-                            self.mother_instance.current_value['longitude'] = lon
-                            self.mother_instance.current_value['heading'] = self.current_heading
-                            # print("end if2")
+                        # if self.prev_value['latitude'] is None or self.prev_value['longitude'] is None or self.prev_value['pitch'] is None or self.prev_value['heading'] is None:
+                        print("in the if 2")
+                        lat, lon = self.calculate_new_position(
+                            self.prev_value['latitude'],
+                            self.prev_value['longitude'],
+                            self.current_x,
+                            self.current_y,
+                            self.prev_value['heading']
+                        )
+                        print("error 5 ")
+                        self.prev_value['latitude'] = lat
+                        self.prev_value['longitude'] = lon
+                        self.prev_value['heading'] = self.current_heading
+                        self.mother_instance.current_value['latitude'] = lat
+                        self.mother_instance.current_value['longitude'] = lon
+                        self.mother_instance.current_value['heading'] = self.current_heading
+                        print("ICP value : lat = {}, lon = {}".format(lat, lon))
+                        # print("end if2")
                     else: 
                         return # don't update if fitness is not enough and leave the prev_scan value
                     

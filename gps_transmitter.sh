@@ -3,4 +3,4 @@
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate main_env
 
-python3 ./24.06.10_main/gps_transmitter/gps_transmitter.py
+python3 ./24.07.17_local_planner/gps_transmitter/gps_transmitter.py

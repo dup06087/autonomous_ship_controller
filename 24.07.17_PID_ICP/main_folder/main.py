@@ -153,13 +153,6 @@ class boat:
             self.icp_test_cpy_thread.start()
         except Exception as e:
             print(f"Exception in nucleo_thread: {e}")
-        
-        except Exception as e:
-            print("nucleo error : ", e)
-            
-        
-
-
 
     def pc_socket_thread(self):
         try:

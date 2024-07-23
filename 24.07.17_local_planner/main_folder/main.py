@@ -4,7 +4,8 @@ from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
 from Jetson_lidar_execution import PointCloudProcessor
-# from prac_ICP import ICPTest
+from prac_ICP import ICPTest
+from pub_twist import VelocityPublisher
 
 # from auto_drive import auto_drive
 from auto_drive_PID import auto_drive
@@ -127,10 +128,10 @@ class boat:
         self.serial_gnss_cpy_thread = None
 
         try:
-            self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
+            # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
             # sudo chmod a+rw /dev/ttyACM0
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
-            # self.serial_gnss_cpy = serial_gnss("/dev/pts/10", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/10", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -146,16 +147,13 @@ class boat:
         except Exception as e:
             print("nucleo error : ", e)
 
-    # def ICP_thread(self):
-    #     try:
-    #         self.icp_test_cpy = ICPTest(self)
-    #         self.icp_test_cpy_thread = threading.Thread(target=self.icp_test_cpy.run)
-    #         self.icp_test_cpy_thread.start()
-    #     except Exception as e:
-    #         print(f"Exception in nucleo_thread: {e}")
-        
-    #     except Exception as e:
-    #         print("nucleo error : ", e)
+    def ICP_thread(self):
+        try:
+            self.icp_test_cpy = ICPTest(self)
+            self.icp_test_cpy_thread = threading.Thread(target=self.icp_test_cpy.run)
+            self.icp_test_cpy_thread.start()
+        except Exception as e:
+            print(f"Exception in nucleo_thread: {e}")
             
         
 
@@ -413,25 +411,37 @@ class boat:
         # lidar_processor.bbox_lists
     
     def goal_publishing_thread(self):
-        self.goal_controller = NavigationController(self)
-        self.goal_controller_thread = threading.Thread(target = self.goal_controller.publish_nav_goal)
-        self.goal_controller_thread.start()
-        print("goal_controller started")
-        
+        try:
+            self.goal_controller = NavigationController(self)
+            self.goal_controller_thread = threading.Thread(target = self.goal_controller.publish_nav_goal)
+            self.goal_controller_thread.start()
+            print("goal_controller started")
+        except Exception as e:
+            print("goal_publishing_thread : ", e)
+    
+    def pub_twist_thread(self):
+        self.velocity_publisher = VelocityPublisher(self)
+        self.velocity_publisher_thread = threading.Thread(target=self.velocity_publisher.publish_velocity)
+        self.velocity_publisher_thread.start()
+            
     def thread_start(self):
         prev_pc_command = None
         self.lidar_thread()
         self.gnss_thread()
         self.nucleo_thread()
-        # self.ICP_thread()
+        self.ICP_thread()
+        
         self.collect_data_thread()
         self.pc_socket_thread()
-
+        self.pub_twist_thread()
         
         self.goal_publishing_thread()
-        self.gps_publisher = GPSPublisher()  # GPSPublisher 인스턴스 생성
-        self.gps_publisher.start()  # GPS 데이터를 publish하는 스레드 시작
-        
+        try:
+            self.gps_publisher = GPSPublisher()  # GPSPublisher 인스턴스 생성
+            self.gps_publisher.start()  # GPS 데이터를 publish하는 스레드 시작
+            print("self.gps+publisher executed")
+        except Exception as e:
+            print("gps publisher eror : ", e)
         
         self.auto_driving() # block in while
         

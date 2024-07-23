@@ -14,8 +14,9 @@ baudrate = 115200
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_stay_start_point.txt' # sh 실행시
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_heading_diff_3.txt' # sh 실행시
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_heading_45.txt' # sh 실행시
+gps_data_file = "./24.07.17_local_planner/gps_transmitter/test_heading_const.txt"
 # gps_data_file = "/home/ices/Desktop/python_code/code/log/2024/06-25/one_cycle_success_1913/log_gnss_raw.txt"
-gps_data_file = "/home/ices/Desktop/python_code/code/24.06.10_main/gps_transmitter/test_pitch_45.txt"
+# gps_data_file = "/home/ices/Desktop/python_code/code/24.06.10_main/gps_transmitter/test_pitch_45.txt"
 # gps_data_file = '/home/ices/Desktop/python_code/code/log_for_test/corn_front/log_gnss_raw.txt' # sh 실행시
 
 # gps_data_file = './24.04.15_for_dwa/gps_transmitter/test_latitude_changing.txt' # sh 실행시

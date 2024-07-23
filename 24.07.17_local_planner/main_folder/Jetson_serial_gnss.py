@@ -160,7 +160,9 @@ class serial_gnss:
                     count_alive += 1
                     if count_alive >= 6:
                         print("gnss no data error, cnt : ", count_alive)
-                        self.flag_gnss = False
+                        self.boat.icp_test_cpy.flag_execute = True
+
+                        # self.flag_gnss = False
                     else:
                         self.flag_gnss = True
 
@@ -174,8 +176,6 @@ class serial_gnss:
     def process_received_data(self, data):
         try:
             decoded_data = data.decode('utf-8').strip()
-            
-            
             current_time = datetime.now()
             log_time = current_time.strftime("%m-%d %H:%M:%S") + '.' + str(current_time.microsecond // 100000)
             
@@ -270,17 +270,18 @@ class serial_gnss:
 
             self.flag_gnss = True
             self.cnt_process = 0
+            self.boat.icp_test_cpy.flag_execute = False
 
         except ValueError as e:
             # when heading pitch is not comming heading pitch raw data comes '' not None
             # print(f"heading pitch not came: {e}")
-    
             self.cnt_process += 1
             if self.cnt_process >= 5:
-                self.current_value['heading'] = None
-                self.current_value['pitch'] = None
                 print("gnss false : heading, pitch")
-                self.flag_gnss = False
+                self.boat.icp_test_cpy.flag_execute = True
+                # self.current_value['heading'] = None
+                # self.current_value['pitch'] = None
+                # self.flag_gnss = False # at ICP 
             
         except Exception as e:
             print("processing pssn error : ", e)
