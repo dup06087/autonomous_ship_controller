@@ -113,7 +113,6 @@ class serial_gnss:
                         time.sleep(1)
                         
                     except Exception as e:
-                        
                         print("gnss readline error : ", e) 
                         print("gnss variable line : ", line)  ## must be one value
 
@@ -136,7 +135,6 @@ class serial_gnss:
                         self.add_to_queue(line_)
                                                     
                 except Exception as e:
-                
                     print("gnss in lines check : ", lines, line_)
 
             except Exception as e:
@@ -158,9 +156,11 @@ class serial_gnss:
                     # print("gnss serial count ", count_alive)
                 else:
                     count_alive += 1
+                    self.boat.icp_test_cpy.flag_execute = True
                     if count_alive >= 6:
+                        
+
                         print("gnss no data error, cnt : ", count_alive)
-                        self.boat.icp_test_cpy.flag_execute = True
 
                         # self.flag_gnss = False
                     else:
@@ -243,9 +243,9 @@ class serial_gnss:
             # LPF 적용
             # filtered_lat = self.apply_low_pass_filter('latitude', new_lat)
             # filtered_lon = self.apply_low_pass_filter('longitude', new_lon)
-
-            self.current_value['latitude'] = round(new_lat, 8)
-            self.current_value['longitude'] = round(new_lon, 8)
+            if not self.boat.icp_test_cpy.flag_execute:
+                self.current_value['latitude'] = round(new_lat, 8)
+                self.current_value['longitude'] = round(new_lon, 8)
 
             self.current_value['velocity'] = float(tokens[7])
             self.cnt_receive = 0
@@ -276,9 +276,11 @@ class serial_gnss:
             # when heading pitch is not comming heading pitch raw data comes '' not None
             # print(f"heading pitch not came: {e}")
             self.cnt_process += 1
+            self.boat.icp_test_cpy.flag_execute = True
+
             if self.cnt_process >= 5:
+
                 print("gnss false : heading, pitch")
-                self.boat.icp_test_cpy.flag_execute = True
                 # self.current_value['heading'] = None
                 # self.current_value['pitch'] = None
                 # self.flag_gnss = False # at ICP 

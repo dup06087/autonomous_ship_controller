@@ -9,7 +9,7 @@ import sys  # sys 모듈 추가
 # gps_data_file = "./log_for_test/corn_front/log_gnss_raw.txt"
 gps_data_file = "/home/ices/Desktop/python_code/code/log_for_test/test_for_hard_part_1913/log_gnss_raw.txt"
 # 시리얼 포트 설정
-port = "/dev/pts/9"  # 실제 사용하는 포트 번호로 변경해주세요.
+port = "/dev/pts/7"  # 실제 사용하는 포트 번호로 변경해주세요.
 baudrate = 115200
 ser = serial.Serial(port, baudrate)
 

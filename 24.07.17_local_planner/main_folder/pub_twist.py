@@ -47,10 +47,14 @@ class VelocityPublisher:
             
             if time_diff > 0:
                 # Calculate distance and bearing
-                distance, bearing = self.calculate_distance_and_bearing(
-                    self.previous_latitude, self.previous_longitude,
-                    current_latitude, current_longitude
-                )
+                try:
+                    distance, bearing = self.calculate_distance_and_bearing(
+                        self.previous_latitude, self.previous_longitude,
+                        current_latitude, current_longitude
+                    )
+                except Exception as e:
+                    print("twsit error : ", e)
+                    return
                 
                 # Calculate heading difference
                 heading_diff = (bearing - current_heading + 360) % 360

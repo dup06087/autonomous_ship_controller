@@ -148,7 +148,8 @@ class PointCloudProcessor:
         # processed_msg = ros_np.array_to_pointcloud2(points, header)
 
         self.pub.publish(points_xyz)
-        
+        # print("lidar callback")
+
     def run(self):
         rospy.spin()
 
