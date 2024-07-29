@@ -8,7 +8,7 @@ from prac_ICP import ICPTest
 from pub_twist import VelocityPublisher
 
 # from auto_drive import auto_drive
-from auto_drive_PID import auto_drive
+from auto_drive_dynamics import auto_drive
 # from auto_drive_pwm_diff_correction import auto_drive
 from goal_publish import NavigationController
 from datetime import datetime
@@ -131,7 +131,7 @@ class boat:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
             # sudo chmod a+rw /dev/ttyACM0
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/8", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/10", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -237,7 +237,17 @@ class boat:
                 self.current_value['pwml_auto'] = 1500
                 self.current_value['pwmr_auto'] = 1500
                 rospy.loginfo("긴급 중지: 경로 업데이트 안 됨")
-            
+
+    def update_cmd_vel(self, data):
+        try:
+            self.linear_x = data.linear.x
+            self.angular_z = data.angular.z
+            print(f"linear.x: {self.linear_x}, angular.z: {self.angular_z}")
+        except Exception as e:
+            self.flag_waypoint_publishing = False
+            print("Error in update_cmd_vel: ", e)
+
+           
     def collect_data(self):
         try:    
             # print("collecting")

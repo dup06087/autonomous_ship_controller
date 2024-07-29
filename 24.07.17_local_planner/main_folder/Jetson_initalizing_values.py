@@ -52,3 +52,20 @@ def initialize_variables(self):
 
     self.integral_ud = 0
     self.prev_roll_component = None
+    
+    self.linear_x = 0
+    self.angular_z = 0
+    
+    self.prev_error_v = 0
+    self.integral_v = 0
+    self.prev_error_omega = 0
+    self.integral_omega = 0
+
+    self.Kp_v = 2.0
+    self.Ki_v = 0.1
+    self.Kd_v = 0.01
+    self.Kp_omega = 10.0
+    self.Ki_omega = 0.1
+    self.Kd_omega = 0.01
+    
+    self.prev_heading = None

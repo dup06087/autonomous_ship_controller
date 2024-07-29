@@ -142,11 +142,12 @@ class ICPTest:
             
     def calculate_new_position(self, lat, lon, delta_x, delta_y, heading):
         # Convert degrees to radians
-        heading_rad = math.radians(heading + 90)
-
+        heading_rad = math.radians(heading)
+        # if heading_rad > 180:
+        #     heading_rad -= 360
         # Calculate the change in position
-        delta_north = delta_x * math.sin(heading_rad) - delta_y * math.cos(heading_rad)
-        delta_east = delta_x * math.cos(heading_rad) + delta_y * math.sin(heading_rad)
+        delta_north = delta_x * math.cos(heading_rad) - delta_y * math.sin(heading_rad)
+        delta_east = -delta_x * math.sin(heading_rad) - delta_y * math.cos(heading_rad)
 
         # Earth radius in meters
         R = 6378137.0
