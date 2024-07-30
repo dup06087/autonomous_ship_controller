@@ -5,7 +5,7 @@ import time
 
 
 # 사용할 가상 시리얼 포트 지정
-port = "/dev/pts/9"  # 실제 사용하는 포트 번호로 변경
+port = "/dev/pts/10"  # 실제 사용하는 포트 번호로 변경
 baudrate = 115200
 
 # 파일 경로 설정

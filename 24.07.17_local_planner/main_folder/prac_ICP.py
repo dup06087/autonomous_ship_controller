@@ -72,6 +72,13 @@ class ICPTest:
             
             else:
                 cloud = self.point_cloud2_to_o3d(data)
+
+                # Define ROI (e.g., a box from (-10, -10, -2) to (10, 10, 2))
+                min_bound = np.array([-20, -20, -1])
+                max_bound = np.array([20, 20, 1])
+                
+                # Crop ROI
+                cloud = self.crop_roi(cloud, min_bound, max_bound)
                 # cloud = self.downsample(cloud)
                 if self.prev_scan is not None:
                     # Perform ICP
@@ -91,13 +98,21 @@ class ICPTest:
                         rotation_euler = self.rotation_matrix_to_euler(rotation_matrix)
                         # Update heading
                         heading_change = np.degrees(rotation_euler[2])  # Yaw change in degrees
+                        print("raw heading change : ", heading_change)
+                        heading_change = math.trunc(heading_change * 10) / 10
+                        # heading_change = round(heading_change,2)
                         print("heading change : ", heading_change)
                         self.current_heading = self.prev_value['heading'] - heading_change
                         self.current_heading = self.current_heading % 360  # Normalize heading to [0, 360)
                         # Calculate distance moved
-                        self.current_x += translation[0]
-                        self.current_y += translation[1]
-                        self.current_z += translation[2]
+                        floored_lat = self.floor_to_eight_decimal_places(translation[0])
+                        floored_lon = self.floor_to_eight_decimal_places(translation[1])
+                        print("raw x,y change : ", translation[0], translation[1])
+                        print("x,y change : ", floored_lat, floored_lon)
+
+                        self.current_x += floored_lat
+                        self.current_y += floored_lon
+                        # self.current_z += round(translation[2], 7)
                         # Print current position and heading
                         # rospy.loginfo(f"Current Position: x={self.current_x}, y={self.current_y}, z={self.current_z}")
                         # rospy.loginfo(f"Current Heading: {self.current_heading} degrees")
@@ -133,12 +148,21 @@ class ICPTest:
                     
                 self.prev_scan = cloud
                 # print("end lidar callback")
-            print("ICP done")
+            # print("ICP done")
         except Exception as e:
             print('lidar callback error : ', e)
             self.mother_instance.serial_gnss_cpy.flag_gnss = False
         
         print("ICP time consuming : ", time.time()-prev_time)
+
+    def floor_to_eight_decimal_places(self, value):
+        return math.trunc(value * 10**2) / 10**2
+
+    def crop_roi(self, cloud, min_bound, max_bound):
+        # Create an AxisAlignedBoundingBox for cropping
+        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
+        cropped_cloud = cloud.crop(bbox)
+        return cropped_cloud
             
     def calculate_new_position(self, lat, lon, delta_x, delta_y, heading):
         # Convert degrees to radians

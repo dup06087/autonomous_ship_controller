@@ -106,6 +106,7 @@ class PointCloudProcessor:
         
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(np.column_stack((pc_array['x'], pc_array['y'], pc_array['z'])))
+        pcd = self.crop_roi(pcd, start=[-10, -10, self.vff_force], end=[10, 10, 0.2])
 
         pcd = self.voxel_down_sampling(pcd, voxel_size=self.voxel_size)
 
@@ -113,8 +114,8 @@ class PointCloudProcessor:
         
         # pcd = self.crop_roi(pcd, start=[-100, -100, -10], end=[100,100, 10])
         
-        pcd = self.crop_roi(pcd, start=[-100, -100, self.vff_force], end=[100, 100, 0.2])
-        # pcd = self.crop_roi(pcd, start=[-10, -10, -0], end=[15, 15, 0.2])
+        # pcd = self.crop_roi(pcd, start=[-100, -100, self.vff_force], end=[100, 100, 0.2])
+        # pcd = self.crop_roi(pcd, start=[-10, -10, -0], end=[10, 10, 0.2])
         
         ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}  # 선체가 위치하는 영역을 지정
         

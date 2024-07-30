@@ -158,9 +158,8 @@ class serial_gnss:
                     count_alive += 1
                     self.boat.icp_test_cpy.flag_execute = True
                     if count_alive >= 6:
-                        
-
-                        print("gnss no data error, cnt : ", count_alive)
+                        pass
+                        # print("gnss no data error, cnt : ", count_alive)
 
                         # self.flag_gnss = False
                     else:

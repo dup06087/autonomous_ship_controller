@@ -131,7 +131,7 @@ class boat:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
             # sudo chmod a+rw /dev/ttyACM0
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/10", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/11", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
