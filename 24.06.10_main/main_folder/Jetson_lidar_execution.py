@@ -9,7 +9,7 @@ import time
 
 class PointCloudProcessor:
     def __init__(self):
-        # rospy.init_node("pointcloud_processor", anonymous=True)
+        rospy.init_node("pointcloud_processor", anonymous=True)
         self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback)
         self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=10)
         self.bbox_lists = []
@@ -96,7 +96,8 @@ class PointCloudProcessor:
         
         return pcd
     
-    def callback(self, msg):        
+    def callback(self, msg):  
+        time_prev = time.time()      
         time_diff = rospy.Time.now() - msg.header.stamp
         if time_diff.to_sec() > 0.05: # realtime
             return
@@ -148,6 +149,7 @@ class PointCloudProcessor:
         # processed_msg = ros_np.array_to_pointcloud2(points, header)
 
         self.pub.publish(points_xyz)
+        print("Lidar Processing Time : ", time.time() - time_prev)
         
     def run(self):
         rospy.spin()

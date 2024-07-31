@@ -3,8 +3,8 @@ from Jetson_initalizing_values import initialize_variables
 from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
-from Jetson_lidar_execution import PointCloudProcessor
-from prac_ICP import ICPTest
+from Jetson_lidar_execution_gpu import PointCloudProcessor
+from prac_ICP_gpu import ICPTest
 from pub_twist import VelocityPublisher
 
 # from auto_drive import auto_drive

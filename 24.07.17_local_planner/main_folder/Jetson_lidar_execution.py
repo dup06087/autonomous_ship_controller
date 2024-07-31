@@ -96,7 +96,8 @@ class PointCloudProcessor:
         
         return pcd
     
-    def callback(self, msg):        
+    def callback(self, msg):
+        time_prev = time.time()        
         time_diff = rospy.Time.now() - msg.header.stamp
         if time_diff.to_sec() > 0.05: # realtime
             return
@@ -150,7 +151,8 @@ class PointCloudProcessor:
 
         self.pub.publish(points_xyz)
         # print("lidar callback")
-
+        print("Lidar Processing Time : ", time.time() - time_prev)
+        
     def run(self):
         rospy.spin()
 
