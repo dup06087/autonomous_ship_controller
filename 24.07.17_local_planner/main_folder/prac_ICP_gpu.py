@@ -142,7 +142,7 @@ class ICPTest:
             print('lidar callback error : ', e)
             self.mother_instance.serial_gnss_cpy.flag_gnss = False
         
-        print("ICP time consuming : ", time.time()-prev_time)
+        # print("ICP time consuming : ", time.time()-prev_time)
 
     def floor_to_eight_decimal_places(self, value):
         return math.trunc(value * 10**2) / 10**2

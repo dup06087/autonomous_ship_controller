@@ -11,13 +11,13 @@ import time
 class PointCloudProcessor:
     def __init__(self):
         self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback)
-        self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=1)
+        self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=5)
         self.bbox_lists = []
         self.pitch = None
 
-    def update_coeff(self, coeff_kf, coeff_kd, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
-        self.coeff_kf = coeff_kf
-        self.coeff_kd = coeff_kd
+    def update_coeff(self, coeff_kv_p, coeff_kv_i, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
+        self.coeff_kv_p = coeff_kv_p
+        self.coeff_kv_i = coeff_kv_i
         self.voxel_size = voxel_size
         self.intensity = intensity
         self.dbscan_eps= dbscan_eps
@@ -75,7 +75,7 @@ class PointCloudProcessor:
     def callback(self, msg):
         time_prev = time.time()
         time_diff = rospy.Time.now() - msg.header.stamp
-        if time_diff.to_sec() > 0.05:
+        if time_diff.to_sec() > 0.1:
             return
         pc_array = ros_np.pointcloud2_to_array(msg)
         points = np.column_stack((pc_array['x'], pc_array['y'], pc_array['z']))
@@ -100,7 +100,7 @@ class PointCloudProcessor:
         header.frame_id = msg.header.frame_id
         points_xyz = pc2.create_cloud_xyz32(header, points_cpu)
         self.pub.publish(points_xyz)
-        rospy.loginfo("Published processed point cloud. Processing Time: {:.2f} seconds".format(time.time() - time_prev))
+        # rospy.loginfo("Published processed point cloud. Processing Time: {:.2f} seconds".format(time.time() - time_prev))
 
     def run(self):
         rospy.spin()

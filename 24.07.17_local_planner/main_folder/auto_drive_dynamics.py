@@ -34,6 +34,8 @@ def auto_drive(self):
     # rospy.Subscriber("/move_base/DWAPlannerROS/global_plan", Path, self.update_global_waypoint)
     # rospy.Subscriber("/move_base/GlobalPlanner/plan", Path, self.update_global_waypoint)
     rospy.Subscriber("/cmd_vel", Twist, self.update_cmd_vel)
+    rospy.Timer(rospy.Duration(self.cmd_vel_timeout), self.check_cmd_vel_timeout)
+
     print("globalplanner subscribing")
     rospy.Timer(rospy.Duration(1), self.check_global_waypoint_timeout)
 
@@ -133,7 +135,7 @@ def auto_drive(self):
                         # self.current_value["waypoint_latitude"] = adjusted_target_lat
                         # self.current_value["waypoint_longitude"] = adjusted_target_lon
                         # calculate_pwm_auto(self, current_latitude, current_longitude, float(adjusted_target_lat), float(adjusted_target_lon), current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
-                        calculate_pwm_auto(self, current_latitude, current_longitude, 0, 0, current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
+                        calculate_pwm_auto(self, current_latitude, current_longitude, 0, 0, current_heading, self.current_value['coeff_kv_p'], self.current_value['coeff_kv_i'])
                     except Exception as e:
                         print("error 4 : ", e)
                     t = time.localtime()    
@@ -148,7 +150,8 @@ def auto_drive(self):
                 
                         self.current_value['distance'] = float(self.distance_to_target)
                     except Exception as e:
-                        print("error 5 : ", e)
+                        pass
+                        # print("error 5 : ", e)
                         
                     ''' self.distance_to_target 값 none 아닌지 확인하는 코드 추가'''
                     if float(self.distance_to_target) <= 2:
@@ -181,7 +184,8 @@ def auto_drive(self):
                             self.current_value["arrived"] = True
                             continue 
                 except Exception as e:
-                    print('error here 2 : ', e)
+                    pass
+                    # print('error here 2 : ', e)
                     
                 current_time = time.time()
                 if current_time - last_print_time >= 3: 
@@ -241,6 +245,13 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         
         v_measured = self.current_value["velocity"]
         omega_measured = -compute_angular_velocity(self) # deg
+        print("current v,w : ", v_measured, omega_measured)
+        print("desired v,w : ", self.linear_x, self.angular_z)
+        
+        if self.linear_x == 0 and self.angular_z == 0:
+            self.current_value["pwml_auto"] = 1500
+            self.current_value["pwmr_auto"] = 1500
+            return
         
         v_control, self.prev_error_v, self.integral_v = compute_pid(
             self.linear_x, v_measured, dt, self.Kp_v, self.Ki_v, self.Kd_v, self.prev_error_v, self.integral_v)
@@ -251,11 +262,11 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         b = 0.295  # 바퀴 사이 거리
         k_L = 0.2217  # 왼쪽 바퀴 계수
         k_R = 0.2217  # 오른쪽 바퀴 계수
-        C_d = 1.0  # 원하는 속도 계수
-        C_tau = 1.0  # 원하는 각속도 계수
+        C_d = 30  # 원하는 속도 계수
+        C_tau = -0.8  # 원하는 각속도 계수
 
-        PWM_left = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_L)
-        PWM_right = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_R)
+        PWM_left = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
+        PWM_right = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_R)
 
         max_pwm = 500
 
@@ -265,9 +276,13 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         PWM_left_mapped = 1500 + (PWM_left_normalized / max_pwm) * 500
         PWM_right_mapped = 1500 + (PWM_right_normalized / max_pwm) * 500
 
-        self.current_value["pwml_auto"] = int(PWM_left_mapped)
-        self.current_value["pwmr_auto"] = int(PWM_right_mapped)
-        print("calcuated pwm auto : ", PWM_left_mapped, PWM_right_mapped)
+        alpha = 0.75
+        PWM_left_LPF = alpha * PWM_left_mapped + (1 - alpha) * self.prev_value["pwml_auto"]
+        PWM_right_LPF = alpha * PWM_right_mapped + (1 - alpha) * self.prev_value["pwmr_auto"]
+        
+        self.current_value["pwml_auto"] = int(PWM_left_LPF)
+        self.current_value["pwmr_auto"] = int(PWM_right_LPF)
+        print("calcuated pwm auto : ", PWM_left_LPF, PWM_right_LPF)
     except Exception as e:
         print("error pwm : ", e)
         

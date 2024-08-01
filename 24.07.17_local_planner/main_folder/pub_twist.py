@@ -8,7 +8,7 @@ class VelocityPublisher:
         self.mother_instance = mother_instance
         self.previous_latitude = self.mother_instance.current_value['latitude']
         self.previous_longitude = self.mother_instance.current_value['longitude']
-        self.pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        # self.pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
         # rospy.init_node('velocity_publisher', anonymous=True)
         self.rate = rospy.Rate(5)  # 5 Hz
         self.previous_time = rospy.Time.now()
@@ -78,8 +78,8 @@ class VelocityPublisher:
                 self.previous_longitude = current_longitude
                 self.previous_time = current_time
                 
-                self.pub.publish(twist)
-                print("velocity published : ", twist)
+                # self.pub.publish(twist)
+                print("velocity : ", twist.linear.x, twist.linear.y)
             self.rate.sleep()
 
 if __name__ == '__main__':

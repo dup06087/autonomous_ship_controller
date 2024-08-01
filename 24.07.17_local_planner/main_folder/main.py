@@ -34,7 +34,7 @@ class boat:
         self.current_value = {
             # dest_latitude, dest_longitude : list, connected with pc def start_driving
             'dest_latitude': None, 'dest_longitude': None, 'mode_pc_command': "SELF", 'com_status_send': False, 'com_status_recv': False, 
-            "coeff_kf" : 3.5, "coeff_kd" : 0.6, "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0,
+            "coeff_kv_p" : 3.5, "coeff_kv_i" : 0.6, "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0,
             # pc get params
             'mode_chk': "SELF", 'pwml_chk': None, 'pwmr_chk': None, # nucleo get params
             'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving
@@ -131,7 +131,7 @@ class boat:
             # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
             # sudo chmod a+rw /dev/ttyACM0
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/11", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/9", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -241,13 +241,24 @@ class boat:
     def update_cmd_vel(self, data):
         try:
             self.linear_x = data.linear.x
-            self.angular_z = data.angular.z
+            self.angular_z = data.angular.z * 180 / math.pi
+            self.last_cmd_vel_time = rospy.Time.now()
             print(f"linear.x: {self.linear_x}, angular.z: {self.angular_z}")
         except Exception as e:
             self.flag_waypoint_publishing = False
             print("Error in update_cmd_vel: ", e)
 
-           
+    def check_cmd_vel_timeout(self, event):
+        try:
+            current_time = rospy.Time.now()
+            if (current_time - self.last_cmd_vel_time).to_sec() > self.cmd_vel_timeout:
+                # Timeout reached, set velocities to zero
+                self.linear_x = 0.0
+                self.angular_z = 0.0
+                print("Timeout reached, setting linear_x and angular_z to 0.")
+        except Exception as e:
+            print("error init cmd_vel to 0")
+            
     def collect_data(self):
         try:    
             # print("collecting")
@@ -261,6 +272,8 @@ class boat:
             ]
             prev_time_collect_data = time.time()
             while True:
+                self.prev_value = copy.deepcopy(self.current_value)
+
                 for task in tasks:
                     try:
                         task()
@@ -283,6 +296,8 @@ class boat:
                     file.write(f"{log_time} : {self.current_value}\n")
                     # print("done?")
                 time.sleep(0.2)
+                
+
                 
         except Exception as e:
             print("data collecting error : ", e)
@@ -326,7 +341,7 @@ class boat:
             self.prev_pc_coeff = copy.deepcopy(current_pc_coeff)
     
     def update_jetson_coeff(self):
-        self.lidar_processor.update_coeff(self.current_value["coeff_kd"], self.current_value["coeff_kd"], self.current_value["voxel_size"],
+        self.lidar_processor.update_coeff(self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["voxel_size"],
                                           self.current_value["intensity"],self.current_value["dbscan_eps"],self.current_value["dbscan_minpoints"],self.current_value["coeff_vff_repulsive_force"])
             
     def update_gnss_data(self):
@@ -430,9 +445,10 @@ class boat:
             print("goal_publishing_thread : ", e)
     
     def pub_twist_thread(self):
-        self.velocity_publisher = VelocityPublisher(self)
-        self.velocity_publisher_thread = threading.Thread(target=self.velocity_publisher.publish_velocity)
-        self.velocity_publisher_thread.start()
+        pass
+        # self.velocity_publisher = VelocityPublisher(self)
+        # self.velocity_publisher_thread = threading.Thread(target=self.velocity_publisher.publish_velocity)
+        # self.velocity_publisher_thread.start()
             
     def thread_start(self):
         prev_pc_command = None
