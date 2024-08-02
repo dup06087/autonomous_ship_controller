@@ -254,9 +254,11 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
             return
         
         v_control, self.prev_error_v, self.integral_v = compute_pid(
-            self.linear_x, v_measured, dt, self.Kp_v, self.Ki_v, self.Kd_v, self.prev_error_v, self.integral_v)
+            self.linear_x, v_measured, dt, self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["coeff_kv_d"],
+            self.prev_error_v, self.integral_v)
         omega_control, self.prev_error_omega, self.integral_omega = compute_pid(
-            self.angular_z, omega_measured, dt, self.Kp_omega, self.Ki_omega, self.Kd_omega, self.prev_error_omega, self.integral_omega)
+            self.angular_z, omega_measured, dt, self.current_value["coeff_kw_p"], self.current_value["coeff_kw_i"], self.current_value["coeff_kw_d"],
+            self.prev_error_omega, self.integral_omega)
         
 
         b = 0.295  # 바퀴 사이 거리

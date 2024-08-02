@@ -13,7 +13,7 @@ class Server_pc:
         self.send_data = {"example_key": "example_value"}
         self.send_obstacle_data = {"obstacle": "example_obstacle"}
         self.pc_command = {'dest_latitude': None, 'dest_longitude': None, 'mode_pc_command': "SELF"}
-        self.pc_coeff = {"coeff_kv_p" : 3.5, "coeff_kv_i" : 0.6, "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0}
+        self.pc_coeff = {"coeff_kv_p" : 3.5, "coeff_kv_i" : 0.6, "coeff_kv_d" : 3.5, "coeff_kw_p" : 0.6, "coeff_kw_i" : 3.5, "coeff_kw_d" : 0.6, "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0}
         self.flag_socket_pc = [False, False, False, False] # receive, send_data, send_obstacle, coeff
         self.flag_socket_init_cycle = [False, False, False, False]
 

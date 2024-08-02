@@ -15,9 +15,13 @@ class PointCloudProcessor:
         self.bbox_lists = []
         self.pitch = None
 
-    def update_coeff(self, coeff_kv_p, coeff_kv_i, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
+    def update_coeff(self, coeff_kv_p, coeff_kv_i, coeff_kv_d, coeff_kw_p, coeff_kw_i, coeff_kw_d, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
         self.coeff_kv_p = coeff_kv_p
         self.coeff_kv_i = coeff_kv_i
+        self.coeff_kv_d = coeff_kv_d
+        self.coeff_kw_p = coeff_kw_p
+        self.coeff_kw_i = coeff_kw_i
+        self.coeff_kw_d = coeff_kw_d
         self.voxel_size = voxel_size
         self.intensity = intensity
         self.dbscan_eps= dbscan_eps

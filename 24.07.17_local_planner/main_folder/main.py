@@ -34,7 +34,8 @@ class boat:
         self.current_value = {
             # dest_latitude, dest_longitude : list, connected with pc def start_driving
             'dest_latitude': None, 'dest_longitude': None, 'mode_pc_command': "SELF", 'com_status_send': False, 'com_status_recv': False, 
-            "coeff_kv_p" : 3.5, "coeff_kv_i" : 0.6, "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0,
+            "coeff_kv_p" : 3.5, "coeff_kv_i" : 0.6, "coeff_kv_d" : 3.5, "coeff_kw_p" : 0.6, "coeff_kw_i" : 3.5, "coeff_kw_d" : 0.6, 
+            "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0,
             # pc get params
             'mode_chk': "SELF", 'pwml_chk': None, 'pwmr_chk': None, # nucleo get params
             'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving
@@ -341,8 +342,9 @@ class boat:
             self.prev_pc_coeff = copy.deepcopy(current_pc_coeff)
     
     def update_jetson_coeff(self):
-        self.lidar_processor.update_coeff(self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["voxel_size"],
-                                          self.current_value["intensity"],self.current_value["dbscan_eps"],self.current_value["dbscan_minpoints"],self.current_value["coeff_vff_repulsive_force"])
+        self.lidar_processor.update_coeff(self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["coeff_kv_d"], self.current_value["coeff_kw_p"],
+                                          self.current_value["coeff_kw_i"], self.current_value["coeff_kw_d"],
+                                          self.current_value["voxel_size"], self.current_value["intensity"],self.current_value["dbscan_eps"],self.current_value["dbscan_minpoints"],self.current_value["coeff_vff_repulsive_force"])
             
     def update_gnss_data(self):
         with self.gnss_lock:
