@@ -266,10 +266,13 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         k_R = 0.2217  # 오른쪽 바퀴 계수
         C_d = 30  # 원하는 속도 계수
         C_tau = -0.8  # 원하는 각속도 계수
-
-        PWM_left = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
-        PWM_right = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_R)
-
+        if self.angular_z >=0:
+            PWM_left = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
+            PWM_right = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_R)
+        if self.angular_z < 0:
+            PWM_left = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
+            PWM_right = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_R)
+        
         max_pwm = 500
 
         PWM_left_normalized = max(-max_pwm, min(max_pwm, PWM_left))
@@ -283,7 +286,11 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         PWM_right_LPF = alpha * PWM_right_mapped + (1 - alpha) * self.prev_value["pwmr_auto"]
         
         self.current_value["pwml_auto"] = int(PWM_left_LPF)
-        self.current_value["pwmr_auto"] = int(PWM_right_LPF)
+        self.current_value["pwmr_auto"] = int(PWM_right_LPF) 
+        
+        print("desired v,w : ", self.linear_x, self.angular_z, ", PWML : ", int(PWM_left_LPF), ", PMWR : ", int(PWM_right_LPF), ", Omega Control : ", omega_control, ", Velocity Control : ", v_control)
+
+
         print("calcuated pwm auto : ", PWM_left_LPF, PWM_right_LPF)
     except Exception as e:
         print("error pwm : ", e)

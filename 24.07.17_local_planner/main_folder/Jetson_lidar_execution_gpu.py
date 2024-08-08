@@ -14,6 +14,7 @@ class PointCloudProcessor:
         self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=5)
         self.bbox_lists = []
         self.pitch = None
+        self.vff_force = 0.2
 
     def update_coeff(self, coeff_kv_p, coeff_kv_i, coeff_kv_d, coeff_kw_p, coeff_kw_i, coeff_kw_d, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
         self.coeff_kv_p = coeff_kv_p

@@ -242,7 +242,7 @@ class boat:
     def update_cmd_vel(self, data):
         try:
             self.linear_x = data.linear.x
-            self.angular_z = data.angular.z * 180 / math.pi
+            self.angular_z = data.angular.z
             self.last_cmd_vel_time = rospy.Time.now()
             print(f"linear.x: {self.linear_x}, angular.z: {self.angular_z}")
         except Exception as e:
