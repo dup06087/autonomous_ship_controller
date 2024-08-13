@@ -129,10 +129,10 @@ class boat:
         self.serial_gnss_cpy_thread = None
 
         try:
-            # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
+            # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0", self.gnss_lock, 1, self)
             # sudo chmod a+rw /dev/ttyACM0
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/9", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/pts/11", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -298,8 +298,6 @@ class boat:
                     # print("done?")
                 time.sleep(0.2)
                 
-
-                
         except Exception as e:
             print("data collecting error : ", e)
 
@@ -447,11 +445,13 @@ class boat:
             print("goal_publishing_thread : ", e)
     
     def pub_twist_thread(self):
-        pass
-        # self.velocity_publisher = VelocityPublisher(self)
-        # self.velocity_publisher_thread = threading.Thread(target=self.velocity_publisher.publish_velocity)
-        # self.velocity_publisher_thread.start()
-            
+        # pass
+        try:
+            self.velocity_publisher = VelocityPublisher(self)
+            self.velocity_publisher_thread = threading.Thread(target=self.velocity_publisher.publish_velocity)
+            self.velocity_publisher_thread.start()
+        except Exception as e:
+            print("velocity publisher main thread error : ", e)
     def thread_start(self):
         prev_pc_command = None
         self.lidar_thread()

@@ -1,87 +1,76 @@
 import rospy
-from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 import math
-import threading
 
 class VelocityPublisher:
     def __init__(self, mother_instance):
+        print("VelocityPublisher Publishing")
         self.mother_instance = mother_instance
-        self.previous_latitude = self.mother_instance.current_value['latitude']
-        self.previous_longitude = self.mother_instance.current_value['longitude']
-        # self.pub = rospy.Publisher('/cmd_vel', Twist, queue_size=10)
+        if self.mother_instance.current_value['heading'] is not None:
+            self.previous_heading = self.mother_instance.current_value['heading']
+        else:
+            self.previous_heading = 0
+            
+        self.pub = rospy.Publisher('/odom', Odometry, queue_size=10)
         # rospy.init_node('velocity_publisher', anonymous=True)
-        self.rate = rospy.Rate(5)  # 5 Hz
+        self.rate = rospy.Rate(5)  # 10 Hz
         self.previous_time = rospy.Time.now()
-
-    def calculate_distance_and_bearing(self, lat1, lon1, lat2, lon2):
-        # Haversine formula to calculate distance between two lat/lon points
-        R = 6371000  # Radius of the Earth in meters
-        phi1 = math.radians(lat1)
-        phi2 = math.radians(lat2)
-        delta_phi = math.radians(lat2 - lat1)
-        delta_lambda = math.radians(lon2 - lon1)
-        
-        a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
-        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-        distance = R * c
-        
-        # Bearing calculation
-        y = math.sin(delta_lambda) * math.cos(phi2)
-        x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(delta_lambda)
-        bearing = (math.degrees(math.atan2(y, x)) + 360) % 360
-        
-        return distance, bearing
 
     def publish_velocity(self):
         while not rospy.is_shutdown():
-            twist = Twist()
-            
-            current_latitude = self.mother_instance.current_value['latitude']
-            current_longitude = self.mother_instance.current_value['longitude']
-            current_velocity = self.mother_instance.current_value['velocity']
-            current_heading = self.mother_instance.current_value['heading']
-            current_time = rospy.Time.now()
-            
-            # Calculate time difference
-            time_diff = (current_time - self.previous_time).to_sec()
-            
-            if time_diff > 0:
-                # Calculate distance and bearing
-                try:
-                    distance, bearing = self.calculate_distance_and_bearing(
-                        self.previous_latitude, self.previous_longitude,
-                        current_latitude, current_longitude
-                    )
-                except Exception as e:
-                    print("twsit error : ", e)
-                    return
+            try:
+                odom = Odometry()
+                if self.mother_instance.current_value['velocity'] == None:
+                    current_velocity = 0
+                else:
+                    current_velocity = self.mother_instance.current_value['velocity']
+                if self.mother_instance.current_value['heading'] == None:
+                    current_heading = 0    
+                else:
+                    current_heading = self.mother_instance.current_value['heading']
+                    
+                current_time = rospy.Time.now()
                 
-                # Calculate heading difference
-                heading_diff = (bearing - current_heading + 360) % 360
-                heading_diff_rad = math.radians(heading_diff)
+                # Calculate time difference
+                time_diff = (current_time - self.previous_time).to_sec()
                 
-                # Calculate velocity components in global frame
-                global_x_velocity = current_velocity * math.cos(heading_diff_rad)
-                global_y_velocity = current_velocity * math.sin(heading_diff_rad)
+                if time_diff > 0:
+                    # Calculate heading difference
+                    heading_diff = (current_heading - self.previous_heading + 360) % 360
+                    if heading_diff > 180:
+                        heading_diff -= 360
+                        
+                    print("odom heading_diff : ", heading_diff)
+                    heading_diff_rad = math.radians(heading_diff)
+                    print("odom heading diff radian ", heading_diff_rad)
+                    # Calculate angular velocity
+                    angular_velocity = round(heading_diff_rad / 0.2, 2)
+                    
+                    # Set Odometry message
+                    odom.header.stamp = current_time
+                    odom.header.frame_id = "odom"
+                    
+                    # Set the position (dummy values for demonstration)
+                    odom.pose.pose = Pose(Point(0.0, 0.0, 0.0), Quaternion(0.0, 0.0, 0.0, 1.0))
+                    
+                    # Set the velocity
+                    odom.child_frame_id = "base_link"
+                    odom.twist.twist = Twist()
+                    odom.twist.twist.linear.x = current_velocity
+                    odom.twist.twist.angular.z = angular_velocity
+                    
+                    # Update previous values
+                    self.previous_heading = current_heading
+                    self.previous_time = current_time
+                    
+                    self.pub.publish(odom)
+                    print("odom published velocity : ", odom.twist.twist.linear.x, odom.twist.twist.angular.z)
                 
-                # Set Twist message
-                twist.linear.x = global_x_velocity
-                twist.linear.y = global_y_velocity
-                twist.linear.z = 0
+                self.rate.sleep()
+            except Exception as e:
+                print("Pub twsit error : ", e)
                 
-                twist.angular.x = 0
-                twist.angular.y = 0
-                twist.angular.z = 0
-
-                # Update previous values
-                self.previous_latitude = current_latitude
-                self.previous_longitude = current_longitude
-                self.previous_time = current_time
-                
-                # self.pub.publish(twist)
-                print("velocity : ", twist.linear.x, twist.linear.y)
-            self.rate.sleep()
-
 if __name__ == '__main__':
     from main import boat
     try:

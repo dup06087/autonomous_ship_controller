@@ -15,6 +15,7 @@ class PointCloudProcessor:
         self.bbox_lists = []
         self.pitch = None
         self.vff_force = 0.2
+        self.voxel_size = 0.01
 
     def update_coeff(self, coeff_kv_p, coeff_kv_i, coeff_kv_d, coeff_kw_p, coeff_kw_i, coeff_kw_d, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
         self.coeff_kv_p = coeff_kv_p
@@ -86,7 +87,7 @@ class PointCloudProcessor:
         points = np.column_stack((pc_array['x'], pc_array['y'], pc_array['z']))
         pcd = o3d.t.geometry.PointCloud(o3c.Tensor(points, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
 
-        pcd = self.crop_roi(pcd, start=[-10, -10, self.vff_force], end=[10, 10, 0.2])
+        pcd = self.crop_roi(pcd, start=[-20, -20, self.vff_force], end=[20, 20, 0.2])
 
         pcd = self.voxel_down_sampling(pcd, voxel_size=self.voxel_size)
 
