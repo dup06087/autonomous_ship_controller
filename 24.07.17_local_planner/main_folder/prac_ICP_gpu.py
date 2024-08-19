@@ -36,7 +36,8 @@ class ICPTest:
 
         # Start the thread to update the current values
         self.update_thread = threading.Thread(target=self.update_values)
-        self.update_thread.daemon = True
+        print("updatethread start")
+        # self.update_thread.daemon = True
         self.update_thread.start()
 
     def run(self):
@@ -44,14 +45,18 @@ class ICPTest:
         
     def update_values(self):
         rate = rospy.Rate(5)  # 0.2 seconds
-        while not rospy.is_shutdown():
-            for key in ['latitude', 'longitude', 'heading', 'pitch']:
-                if not self.flag_execute:
-                    value = self.mother_instance.current_value[key]
-                    if value is not None:
-                        self.prev_value[key] = self.mother_instance.current_value[key]
-            rate.sleep()
-
+        while True:
+            try:
+                for key in ['latitude', 'longitude', 'heading', 'pitch']:
+                    if not self.flag_execute:
+                        value = self.mother_instance.current_value[key]
+                        if value is not None:
+                            self.prev_value[key] = self.mother_instance.current_value[key]
+                rate.sleep()
+                
+            except Exception as e:
+                print("icp update value error : ", e)
+                
     def lidar_callback(self, data):
         prev_time = time.time()
         # Check if the timestamp is too old
@@ -72,24 +77,39 @@ class ICPTest:
                 cloud = self.point_cloud2_to_o3d(data)
 
                 # Define ROI (e.g., a box from (-20, -20, -1) to (20, 20, 1))
-                # min_bound = np.array([-20, -20, -1])
-                # max_bound = np.array([20, 20, 1])
+                min_bound = np.array([-10, -10, -1])
+                max_bound = np.array([10, 10, 1])
                 
-                # # Crop ROI
-                # cloud = self.crop_roi(cloud, min_bound, max_bound)
+                # Crop ROI
+                cloud = self.crop_roi(cloud, min_bound, max_bound)
 
                 # Downsample point cloud
                 cloud = self.downsample(cloud)
 
                 if self.prev_scan is not None:
                     # Perform ICP
-                    reg_p2p = o3d.pipelines.registration.registration_icp(
-                        cloud.to_legacy(), self.prev_scan.to_legacy(), 0.5,
-                        np.identity(4),
-                        o3d.pipelines.registration.TransformationEstimationPointToPoint())
-                    transf = reg_p2p.transformation
+                    # reg_p2p = o3d.pipelines.registration.registration_icp(
+                    #     cloud.to_legacy(), self.prev_scan.to_legacy(), 0.5,
+                    #     np.identity(4),
+                    #     o3d.pipelines.registration.TransformationEstimationPointToPoint())
+                    # transf = reg_p2p.transformation
+                    #GICP
+                    # reg_gicp = o3d.pipelines.registration.registration_generalized_icp(
+                    #     cloud.to_legacy(), self.prev_scan.to_legacy(), 0.5,
+                    #     np.identity(4),
+                    #     o3d.pipelines.registration.TransformationEstimationForGeneralizedICP())
+                    # transf = reg_gicp.transformation
+                    # on GPU
+                    reg_gicp = o3d.t.pipelines.registration.icp(
+                        source=cloud, 
+                        target=self.prev_scan,
+                        max_correspondence_distance=0.5,
+                        init_source_to_target=o3c.Tensor(np.identity(4), dtype=o3c.float32, device=cloud.device),
+                        estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPoint()
+                    )
+                    transf = reg_gicp.transformation.cpu().numpy()  # Convert the result back to a numpy array
 
-                    if reg_p2p.fitness > 0.8:  # Check fitness score
+                    if reg_gicp.fitness > 0.8:  # Check fitness score
                         self.current_x = 0
                         self.current_y = 0
                         self.current_z = 0
@@ -123,7 +143,8 @@ class ICPTest:
                             self.prev_value['longitude'],
                             self.current_x,
                             self.current_y,
-                            self.current_heading
+                            # self.current_heading
+                            self.prev_value['heading']
                         )
                         
                         self.prev_value['latitude'] = round(lat, 8)
@@ -137,15 +158,17 @@ class ICPTest:
                         self.mother_instance.serial_gnss_cpy.current_value['latitude'] = round(lat, 8)
                         self.mother_instance.serial_gnss_cpy.current_value['longitude'] = round(lon, 8)
                         self.mother_instance.serial_gnss_cpy.current_value['heading'] = round(self.current_heading, 2)
+                        
                     else: 
                         print("fitness low")
                     
                 self.prev_scan = cloud
+                
         except Exception as e:
             print('lidar callback error : ', e)
             self.mother_instance.serial_gnss_cpy.flag_gnss = False
         
-        # print("ICP time consuming : ", time.time()-prev_time)
+        print("ICP time consuming : ", time.time()-prev_time)
 
     def floor_to_eight_decimal_places(self, value):
         return math.trunc(value * 10**2) / 10**2
@@ -169,9 +192,17 @@ class ICPTest:
 
         # Earth radius in meters
         R = 6378137.0
-
+            # WGS84 ellipsoid constants
+        a = 6378137.0  # Equatorial radius in meters
+        e = 0.08181919  # Eccentricity
+        
+        lat_rad = math.radians(lat)
+        R_m = a * (1 - e**2) / (1 - e**2 * math.sin(lat_rad)**2)**1.5
+    
+        delta_lat = delta_north / R_m
+        
         # Calculate new latitude
-        delta_lat = delta_north / R
+        # delta_lat = delta_north / R
         new_lat = lat + math.degrees(delta_lat)
 
         # Calculate new longitude
@@ -181,10 +212,13 @@ class ICPTest:
         return new_lat, new_lon
 
     def point_cloud2_to_o3d(self, cloud_msg):
-        points = []
-        for p in pc2.read_points(cloud_msg, skip_nans=True):
-            points.append([p[0], p[1], p[2]])
-        cloud = o3d.t.geometry.PointCloud(o3c.Tensor(np.array(points), dtype=o3c.float32, device=o3c.Device("CUDA:0")))
+        # points = []
+        # for p in pc2.read_points(cloud_msg, skip_nans=True):
+        #     points.append([p[0], p[1], p[2]])
+        # cloud = o3d.t.geometry.PointCloud(o3c.Tensor(np.array(points), dtype=o3c.float32, device=o3c.Device("CUDA:0")))
+        points = np.array(list(pc2.read_points(cloud_msg, skip_nans=True, field_names=("x", "y", "z"))))
+        cloud = o3d.t.geometry.PointCloud(o3c.Tensor(points, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
+        
         return cloud
 
     def downsample(self, cloud, voxel_size=0.1):

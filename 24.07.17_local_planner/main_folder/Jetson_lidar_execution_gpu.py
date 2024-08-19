@@ -56,28 +56,38 @@ class PointCloudProcessor:
 
         return pcd.transform(T_tensor)
 
+    # def remove_ship_body(self, pcd, ship_body_bounds):
+    #     # GPU에서 CPU로 데이터를 이동
+    #     pcd_tensor = pcd.point.positions.to(o3c.Device("CPU:0"))
+
+    #     # ship_body_bounds의 min과 max 값을 텐서로 변환
+    #     min_bound = np.array(ship_body_bounds['min'])
+    #     max_bound = np.array(ship_body_bounds['max'])
+
+    #     # 범위에 포함되지 않는 포인트를 남김
+    #     mask = ~((pcd_tensor[:, 0].numpy() >= min_bound[0]) &
+    #             (pcd_tensor[:, 0].numpy() <= max_bound[0]) &
+    #             (pcd_tensor[:, 1].numpy() >= min_bound[1]) &
+    #             (pcd_tensor[:, 1].numpy() <= max_bound[1]) &
+    #             (pcd_tensor[:, 2].numpy() >= min_bound[2]) &
+    #             (pcd_tensor[:, 2].numpy() <= max_bound[2]))
+
+    #     filtered_pcd_tensor = pcd_tensor.numpy()[mask]
+    #     # 필터링된 포인트들을 GPU로 다시 전송
+    #     filtered_pcd = o3d.t.geometry.PointCloud(o3c.Tensor(filtered_pcd_tensor, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
+    #     return filtered_pcd
+
     def remove_ship_body(self, pcd, ship_body_bounds):
-        # GPU에서 CPU로 데이터를 이동
-        pcd_tensor = pcd.point.positions.to(o3c.Device("CPU:0"))
+        min_bound = o3c.Tensor(ship_body_bounds['min'], dtype=o3c.float32, device=pcd.device)
+        max_bound = o3c.Tensor(ship_body_bounds['max'], dtype=o3c.float32, device=pcd.device)
 
-        # ship_body_bounds의 min과 max 값을 텐서로 변환
-        min_bound = np.array(ship_body_bounds['min'])
-        max_bound = np.array(ship_body_bounds['max'])
+        mask = (pcd.point.positions[:, 0] < min_bound[0]) | (pcd.point.positions[:, 0] > max_bound[0]) | \
+               (pcd.point.positions[:, 1] < min_bound[1]) | (pcd.point.positions[:, 1] > max_bound[1]) | \
+               (pcd.point.positions[:, 2] < min_bound[2]) | (pcd.point.positions[:, 2] > max_bound[2])
 
-        # 범위에 포함되지 않는 포인트를 남김
-        mask = ~((pcd_tensor[:, 0].numpy() >= min_bound[0]) &
-                (pcd_tensor[:, 0].numpy() <= max_bound[0]) &
-                (pcd_tensor[:, 1].numpy() >= min_bound[1]) &
-                (pcd_tensor[:, 1].numpy() <= max_bound[1]) &
-                (pcd_tensor[:, 2].numpy() >= min_bound[2]) &
-                (pcd_tensor[:, 2].numpy() <= max_bound[2]))
-
-        filtered_pcd_tensor = pcd_tensor.numpy()[mask]
-        # 필터링된 포인트들을 GPU로 다시 전송
-        filtered_pcd = o3d.t.geometry.PointCloud(o3c.Tensor(filtered_pcd_tensor, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
+        filtered_pcd = pcd.select_by_mask(mask)
         return filtered_pcd
-
-
+    
     def callback(self, msg):
         time_prev = time.time()
         time_diff = rospy.Time.now() - msg.header.stamp

@@ -106,7 +106,8 @@ def auto_drive(self):
                     
                     time.sleep(0.2)
             except Exception as e:
-                print("error auto drive : ", e)
+                pass
+                # print("error auto drive : ", e)
                 
             else: ### ready to auto drive
                 try:
@@ -144,7 +145,7 @@ def auto_drive(self):
                     try:
                         # with open('log_pwm.txt', 'a') as file:
                         #     file.write("{} : {},{}\n".format(log_time, self.current_value["pwml_auto"], self.current_value["pwmr_auto"]))
-                        print(f"value check : {current_latitude} {current_longitude} {self.current_value['dest_latitude'][self.cnt_destination]} {self.current_value['dest_longitude'][self.cnt_destination]} {self.cnt_destination}")
+                        # print(f"value check : {current_latitude} {current_longitude} {self.current_value['dest_latitude'][self.cnt_destination]} {self.current_value['dest_longitude'][self.cnt_destination]} {self.cnt_destination}")
                         self.distance_to_target = haversine((current_latitude, current_longitude),
                                             (self.current_value['dest_latitude'][self.cnt_destination], self.current_value['dest_longitude'][self.cnt_destination]), unit='m')
                 
@@ -229,24 +230,40 @@ def convert_metric_to_latlon(base_lat, base_lon, distance_x, distance_y, current
 
 def compute_angular_velocity(self):
     dt = 0.2  # 고정된 시간 간격
-    if self.prev_heading is not None:
-        heading_diff = self.current_value["heading"] - self.prev_heading
+    if self.prev_value['heading'] is not None and self.current_value['heading'] is not None:
+        heading_diff = self.current_value["heading"] - self.prev_value["heading"]
         if heading_diff > 180:
             heading_diff -= 360
         elif heading_diff < -180:
             heading_diff += 360
         angular_velocity = heading_diff / dt
-    self.prev_heading = self.current_value["heading"]
-    self.prev_time = time.time()
+        angular_velocity = angular_velocity * math.pi / 180
+        # print("angular velocity in compute_angular_velocity : ", angular_velocity)
+        
+    else:
+        angular_velocity = 0
     return angular_velocity
+
+# def compute_angular_velocity(self):
+#     dt = 0.2  # 고정된 시간 간격
+#     if self.prev_heading is not None:
+#         heading_diff = self.current_value["heading"] - self.prev_heading
+#         if heading_diff > 180:
+#             heading_diff -= 360
+#         elif heading_diff < -180:
+#             heading_diff += 360
+#         angular_velocity = heading_diff / dt
+#     self.prev_heading = self.current_value["heading"]
+#     self.prev_time = time.time()
+#     return angular_velocity
     
 def calculate_pwm_auto(self, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading, Kf=2.5, Kd=0.318, Ki=0.1, dt=0.2):
     try:
         
         v_measured = self.current_value["velocity"]
         omega_measured = -compute_angular_velocity(self) # deg
-        print("current v,w : ", v_measured, omega_measured)
-        print("desired v,w : ", self.linear_x, self.angular_z)
+        # print("current v,w : ", v_measured, omega_measured) 
+        # print("desired v,w : ", self.linear_x, self.angular_z) # rad
         
         if self.linear_x == 0 and self.angular_z == 0:
             self.current_value["pwml_auto"] = 1500
@@ -266,12 +283,13 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         k_R = 0.2217  # 오른쪽 바퀴 계수
         C_d = 30  # 원하는 속도 계수
         C_tau = -0.8  # 원하는 각속도 계수
-        if self.angular_z >=0:
-            PWM_left = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
-            PWM_right = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_R)
-        if self.angular_z < 0:
-            PWM_left = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
-            PWM_right = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_R)
+        
+        # if self.angular_z >=0:
+        PWM_left = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
+        PWM_right = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_R)
+        # elif self.angular_z < 0:
+        #     PWM_left = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction
+        #     PWM_right = (b * C_d * v_control - C_tau * omega_control) / (2 * b * k_R)
         
         max_pwm = 500
 
@@ -288,10 +306,10 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         self.current_value["pwml_auto"] = int(PWM_left_LPF)
         self.current_value["pwmr_auto"] = int(PWM_right_LPF) 
         
-        print("desired v,w : ", self.linear_x, self.angular_z, ", PWML : ", int(PWM_left_LPF), ", PMWR : ", int(PWM_right_LPF), ", Omega Control : ", omega_control, ", Velocity Control : ", v_control)
+        # print("desired v,w : ", self.linear_x, self.angular_z, ", PWML : ", int(PWM_left_LPF), ", PMWR : ", int(PWM_right_LPF), ", Omega Control : ", omega_control, ", Velocity Control : ", v_control)
 
 
-        print("calcuated pwm auto : ", PWM_left_LPF, PWM_right_LPF)
+        # print("calcuated pwm auto : ", PWM_left_LPF, PWM_right_LPF)
     except Exception as e:
         print("error pwm : ", e)
         

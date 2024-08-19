@@ -41,9 +41,9 @@ class VelocityPublisher:
                     if heading_diff > 180:
                         heading_diff -= 360
                         
-                    print("odom heading_diff : ", heading_diff)
+                    # print("odom heading_diff : ", heading_diff)
                     heading_diff_rad = math.radians(heading_diff)
-                    print("odom heading diff radian ", heading_diff_rad)
+                    # print("odom heading diff radian ", heading_diff_rad)
                     # Calculate angular velocity
                     angular_velocity = round(heading_diff_rad / 0.2, 2)
                     
@@ -65,7 +65,7 @@ class VelocityPublisher:
                     self.previous_time = current_time
                     
                     self.pub.publish(odom)
-                    print("odom published velocity : ", odom.twist.twist.linear.x, odom.twist.twist.angular.z)
+                    # print("odom published velocity : ", odom.twist.twist.linear.x, odom.twist.twist.angular.z)
                 
                 self.rate.sleep()
             except Exception as e:

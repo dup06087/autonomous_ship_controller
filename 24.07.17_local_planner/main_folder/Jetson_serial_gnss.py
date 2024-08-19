@@ -106,6 +106,8 @@ class serial_gnss:
                             # print("line : ", line)
                             lines.append(line)
                     except serial.SerialException as e:
+                        self.boat.icp_test_cpy.flag_execute = True
+
                         print("gnss serial exception : ", e, " >> : gnss flag False")
                         for key in self.current_value.keys():
                             self.current_value[key] = None
@@ -139,6 +141,8 @@ class serial_gnss:
 
             except Exception as e:
                 print("GNSS Error data receive part : ", e)
+                self.boat.icp_test_cpy.flag_execute = True
+
                 # lines = []
                 # self.close()
                 
@@ -156,9 +160,9 @@ class serial_gnss:
                     # print("gnss serial count ", count_alive)
                 else:
                     count_alive += 1
-                    self.boat.icp_test_cpy.flag_execute = True
-                    if count_alive >= 6:
-                        pass
+                    if count_alive >= 3:
+                        self.boat.icp_test_cpy.flag_execute = True
+                        # pass
                         # print("gnss no data error, cnt : ", count_alive)
 
                         # self.flag_gnss = False
@@ -192,7 +196,7 @@ class serial_gnss:
             # print("tokens : ", tokens)
             header = tokens[0]
 
-            if header in ['$GPRMC', '$GNRMC']:
+            if header in ['$GPRMC', '$GNRMC', '$GARMC']:
                 self._process_gnrmc_data(tokens)
 
                 # self.send_to_lidar(decoded_data)
@@ -246,7 +250,7 @@ class serial_gnss:
                 self.current_value['latitude'] = round(new_lat, 8)
                 self.current_value['longitude'] = round(new_lon, 8)
 
-            self.current_value['velocity'] = float(tokens[7])
+            self.current_value['velocity'] = round(float(tokens[7]) * 0.51444, 2)
             self.cnt_receive = 0
 
         except ValueError as e:
@@ -275,10 +279,8 @@ class serial_gnss:
             # when heading pitch is not comming heading pitch raw data comes '' not None
             # print(f"heading pitch not came: {e}")
             self.cnt_process += 1
-            self.boat.icp_test_cpy.flag_execute = True
-
-            if self.cnt_process >= 5:
-
+            if self.cnt_process >= 3:
+                self.boat.icp_test_cpy.flag_execute = True
                 print("gnss false : heading, pitch")
                 # self.current_value['heading'] = None
                 # self.current_value['pitch'] = None

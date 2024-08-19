@@ -127,12 +127,11 @@ class boat:
     def gnss_thread(self):
         self.serial_gnss_cpy = None
         self.serial_gnss_cpy_thread = None
-
         try:
-            # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM0", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
             # sudo chmod a+rw /dev/ttyACM0
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/11", self.gnss_lock, 1, self)
+            # self.serial_gnss_cpy = serial_gnss("/dev/pts/7", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -156,10 +155,6 @@ class boat:
         except Exception as e:
             print(f"Exception in nucleo_thread: {e}")
             
-        
-
-
-
     def pc_socket_thread(self):
         try:
             self.jetson_socket_pc = Server_pc(self)
@@ -242,9 +237,9 @@ class boat:
     def update_cmd_vel(self, data):
         try:
             self.linear_x = data.linear.x
-            self.angular_z = data.angular.z
+            self.angular_z = data.angular.z # rad/s
             self.last_cmd_vel_time = rospy.Time.now()
-            print(f"linear.x: {self.linear_x}, angular.z: {self.angular_z}")
+            # print(f"linear.x: {self.linear_x}, angular.z: {self.angular_z}")
         except Exception as e:
             self.flag_waypoint_publishing = False
             print("Error in update_cmd_vel: ", e)
@@ -258,7 +253,8 @@ class boat:
                 self.angular_z = 0.0
                 print("Timeout reached, setting linear_x and angular_z to 0.")
         except Exception as e:
-            print("error init cmd_vel to 0")
+            pass
+            # print("error init cmd_vel to 0")
             
     def collect_data(self):
         try:    
@@ -282,7 +278,7 @@ class boat:
                     except Exception as e:
                         if time.time() - prev_time_collect_data >=1:
                             prev_time_collect_data = time.time()
-                            print("collect data error : {}".format(e))
+                            # print("collect data error : {}".format(e))
                         # pass
       
                 # print("collected current value : ", self.current_value)
@@ -495,10 +491,10 @@ class boat:
                 except:
                     pass
                 
-                try:
-                    print("to pc current value: ", self.jetson_socket_pc.message_to_pc)
-                except:
-                    pass
+                # try:
+                #     print("to pc current value: ", self.jetson_socket_pc.message_to_pc)
+                # except:
+                #     pass
                 
                 try:
                     print("output : ", self.current_value)

@@ -35,6 +35,7 @@ class serial_gnss:
     def run_once(self):
         try:
             # 데이터를 한번만 읽어오기
+            time.sleep(1)
             lines = []
             while self.serial_port.in_waiting:
                 line = self.serial_port.readline()
@@ -120,7 +121,7 @@ class ICPTest:
     def __init__(self, mother_instance):
         self.prev_scan = None
         self.mother_instance = mother_instance
-        self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback)
+        self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=2)
 
         # Initial position and heading
         self.current_x = 0.0
@@ -158,16 +159,19 @@ class ICPTest:
         # Check if the timestamp is too old
         time_diff = rospy.Time.now() - data.header.stamp
         if time_diff.to_sec() > 0.05:  # Adjust this threshold as needed
-            print("erase old pc data")
+            # print("erase old pc data")
             return
         try:
+            # print("done")
+            # pass
             # Check if any required value is None in mother_instance.current_value
             if self.flag_execute:
+                # print("in the if")
                 cloud = self.point_cloud2_to_o3d(data)
 
                 # Define ROI (e.g., a box from (-20, -20, -1) to (20, 20, 1))
-                min_bound = np.array([-20, -20, -1])
-                max_bound = np.array([20, 20, 1])
+                min_bound = np.array([-10, -10, -0.2])
+                max_bound = np.array([10, 10, 0.2])
                 
                 # # Crop ROI
                 cloud = self.crop_roi(cloud, min_bound, max_bound)
@@ -194,7 +198,7 @@ class ICPTest:
                         
                         heading_change = np.degrees(rotation_euler[2])  # Yaw change in degrees
                         heading_change = math.trunc(heading_change * 10) / 10
-                        print("heading_change : ", heading_change)
+                        # print("heading_change : ", heading_change)
                         self.current_heading = self.prev_value['heading'] - heading_change
                         if self.current_heading > 180:
                             self.current_heading -= 360
@@ -222,11 +226,10 @@ class ICPTest:
                         self.prev_value['latitude'] = round(lat, 8)
                         self.prev_value['longitude'] = round(lon, 8)
                         self.prev_value['heading'] = round(self.current_heading, 2)
-                        
-                        print("current value : ", self.prev_value['latitude'], self.prev_value['longitude'], self.prev_value['heading'])
-                        self.log_file.write(f"{rospy.Time.now().to_sec()}, {self.current_x}, {self.current_y}, {self.current_z}, {heading_change}, {self.current_heading}\n")
+                        # print(self.prev_value['heading'])
+                        # print("current value : ", self.prev_value['latitude'], self.prev_value['longitude'], self.prev_value['heading'])
+                        # self.log_file.write(f"{rospy.Time.now().to_sec()}, {self.current_x}, {self.current_y}, {self.current_z}, {heading_change}, {self.current_heading}\n")
 
-                        
                     else: 
                         print("fitness low")
                         
@@ -236,7 +239,7 @@ class ICPTest:
             print('lidar callback error : ', e)
             # self.mother_instance.serial_gnss_cpy.flag_gnss = False
         
-        # print("ICP time consuming : ", time.time()-prev_time)
+        print("ICP time consuming : ", time.time()-prev_time)
 
     def floor_to_eight_decimal_places(self, value):
         return math.trunc(value * 10**2) / 10**2
@@ -253,7 +256,7 @@ class ICPTest:
         # Convert degrees to radians
         if heading > 180:
             heading -= 360
-            
+        
         heading_rad = math.radians(-heading)
         delta_north = delta_x * math.cos(heading_rad) - delta_y * math.sin(heading_rad)
         delta_east = -delta_x * math.sin(heading_rad) - delta_y * math.cos(heading_rad)
@@ -278,7 +281,7 @@ class ICPTest:
         cloud = o3d.t.geometry.PointCloud(o3c.Tensor(np.array(points), dtype=o3c.float32, device=o3c.Device("CUDA:0")))
         return cloud
 
-    def downsample(self, cloud, voxel_size=0.1):
+    def downsample(self, cloud, voxel_size=0.05):
         # GPU에서 다운샘플링 수행
         return cloud.voxel_down_sample(voxel_size)
 
