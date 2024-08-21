@@ -58,6 +58,8 @@ class ICPTest:
                 print("icp update value error : ", e)
                 
     def lidar_callback(self, data):
+        return 0
+    
         prev_time = time.time()
         # Check if the timestamp is too old
         time_diff = rospy.Time.now() - data.header.stamp
@@ -84,7 +86,7 @@ class ICPTest:
                 cloud = self.crop_roi(cloud, min_bound, max_bound)
 
                 # Downsample point cloud
-                cloud = self.downsample(cloud)
+                # cloud = self.downsample(cloud) # in the icp
 
                 if self.prev_scan is not None:
                     # Perform ICP
@@ -105,7 +107,7 @@ class ICPTest:
                         target=self.prev_scan,
                         max_correspondence_distance=0.5,
                         init_source_to_target=o3c.Tensor(np.identity(4), dtype=o3c.float32, device=cloud.device),
-                        estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPoint()
+                        estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPoint(),
                     )
                     transf = reg_gicp.transformation.cpu().numpy()  # Convert the result back to a numpy array
 

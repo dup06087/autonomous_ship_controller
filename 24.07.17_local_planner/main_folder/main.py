@@ -472,7 +472,7 @@ class boat:
         time_prev = 0
         while True:
             time_ = time.time()
-            if time_ - time_prev >= 3:
+            if time_ - time_prev >= 10:
                 try:
                     pass
                     # print("from Nucleo : ", self.serial_nucleo_cpy.nucleo_feedback_values)

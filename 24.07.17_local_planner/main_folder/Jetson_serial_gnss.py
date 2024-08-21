@@ -249,7 +249,14 @@ class serial_gnss:
             if not self.boat.icp_test_cpy.flag_execute:
                 self.current_value['latitude'] = round(new_lat, 8)
                 self.current_value['longitude'] = round(new_lon, 8)
-
+            else:
+                if self.current_value['latitude'] == None:
+                    self.current_value['latitude'] = round(new_lat, 8)
+                    self.current_value['longitude'] = round(new_lon, 8)
+                    #below test
+                    self.current_value['heading'] = 0
+                    self.current_value['pitch'] = 0
+                    
             self.current_value['velocity'] = round(float(tokens[7]) * 0.51444, 2)
             self.cnt_receive = 0
 
@@ -281,7 +288,7 @@ class serial_gnss:
             self.cnt_process += 1
             if self.cnt_process >= 3:
                 self.boat.icp_test_cpy.flag_execute = True
-                print("gnss false : heading, pitch")
+                # print("gnss false : heading, pitch")
                 # self.current_value['heading'] = None
                 # self.current_value['pitch'] = None
                 # self.flag_gnss = False # at ICP 

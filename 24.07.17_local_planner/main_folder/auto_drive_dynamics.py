@@ -263,7 +263,7 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         v_measured = self.current_value["velocity"]
         omega_measured = -compute_angular_velocity(self) # deg
         # print("current v,w : ", v_measured, omega_measured) 
-        # print("desired v,w : ", self.linear_x, self.angular_z) # rad
+        print("desired v,w(rad) : ", self.linear_x, self.angular_z) # rad
         
         if self.linear_x == 0 and self.angular_z == 0:
             self.current_value["pwml_auto"] = 1500

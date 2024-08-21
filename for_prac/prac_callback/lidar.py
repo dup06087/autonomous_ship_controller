@@ -11,12 +11,12 @@ from threading import Lock
 
 class PointCloudProcessor:
     def __init__(self):
-        self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback, queue_size=10)
+        self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback, queue_size=10, buff_size = 1248)
         self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=10)
         self.bbox_lists = []
         self.pitch = None
-        self.vff_force = 0.2
-        self.voxel_size = 0.01
+        self.vff_force = -0.3
+        self.voxel_size = 0.1
         self.lock = Lock()
 
     def update_coeff(self, coeff_kv_p, coeff_kv_i, coeff_kv_d, coeff_kw_p, coeff_kw_i, coeff_kw_d, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
@@ -134,13 +134,16 @@ class PointCloudProcessor:
         
 
     def callback(self, msg):
-        # return
         time_prev = time.time()
+        time_prev_local = time.localtime()
+        print("callback in : ", time_prev_local)
         time_diff = rospy.Time.now() - msg.header.stamp
         if time_diff.to_sec() > 0.1:
-            # print("returned lidar callback : ", time_diff.to_sec())
+            print("returned lidar callback : ", time_diff.to_sec())
+            print("return time : ", time.time() - time_prev)
             return
         # return
+        
         pc_array = ros_np.pointcloud2_to_array(msg)
         points = np.column_stack((pc_array['x'], pc_array['y'], pc_array['z']))
         pcd = o3d.t.geometry.PointCloud(o3c.Tensor(points, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
@@ -151,8 +154,7 @@ class PointCloudProcessor:
 
         pcd = self.rotate_point_cloud_by_pitch(pcd)
 
-        # ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}
-        ship_body_bounds = {'min': [-5, -5, -0.6], 'max': [5, 5, 0.31]}
+        ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
 
         points_cpu = pcd.point.positions.to(o3c.Device("CPU:0")).numpy()
@@ -165,7 +167,8 @@ class PointCloudProcessor:
         header.frame_id = msg.header.frame_id
         points_xyz = pc2.create_cloud_xyz32(header, points_cpu)
         self.pub.publish(points_xyz)
-        # rospy.loginfo("Published processed point cloud. Processing Time: {:.2f} seconds".format(time.time() - time_prev))
+        print("callback proccesed : ", time.localtime())
+        # rospy.loginfo("Published processed point cloud. Processed time : ")
         
     def run(self):
         rospy.spin()

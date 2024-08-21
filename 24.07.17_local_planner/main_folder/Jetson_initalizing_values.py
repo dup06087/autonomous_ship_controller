@@ -69,7 +69,7 @@ def initialize_variables(self):
     self.Kd_omega = 0.00
     
     self.prev_heading = None
-    self.cmd_vel_timeout = 1.0  # 1 second timeout
+    self.cmd_vel_timeout = 2.0  # 1 second timeout
 
     self.prev_value = {
             # dest_latitude, dest_longitude : list, connected with pc def start_driving
