@@ -16,7 +16,7 @@ class NavigationController:
         self.client = SimpleActionClient('move_base', MoveBaseAction)
         self.pub_goal = rospy.Publisher('/move_base_simple/goal', PoseStamped, queue_size=10)
         self.pub_cancel = rospy.Publisher('/move_base/cancel', GoalID, queue_size=10)
-        self.clear_costmaps_service = rospy.ServiceProxy('/move_base/clear_costmaps', Empty)
+        # self.clear_costmaps_service = rospy.ServiceProxy('/move_base/clear_costmaps', Empty)
         
         # self.costmap_subscriber = rospy.Subscriber(
         #     "/move_base/global_costmap/costmap", 
@@ -24,18 +24,18 @@ class NavigationController:
         #     self.costmap_callback
         # ) # no need
         
-        self.costmap_updates_subscriber = rospy.Subscriber(
-            "/move_base/global_costmap/costmap_updates", 
-            OccupancyGridUpdate, 
-            self.costmap_updates_callback
-        )
+        # self.costmap_updates_subscriber = rospy.Subscriber(
+        #     "/move_base/global_costmap/costmap_updates", 
+        #     OccupancyGridUpdate, 
+        #     self.costmap_updates_callback
+        # )
 
-        # /move_base/global_costmap/inflation_layer/inflated_costmap_value 토픽 구독
-        self.costmap_value_subscriber = rospy.Subscriber(
-            "/move_base/global_costmap/inflation_layer/inflated_costmap_value",
-            Int32,
-            self.costmap_value_callback
-        )
+        # # /move_base/global_costmap/inflation_layer/inflated_costmap_value 토픽 구독
+        # self.costmap_value_subscriber = rospy.Subscriber(
+        #     "/move_base/global_costmap/inflation_layer/inflated_costmap_value",
+        #     Int32,
+        #     self.costmap_value_callback
+        # )
         
         self.current_lat = 0.0
         self.current_lon = 0.0

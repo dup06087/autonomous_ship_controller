@@ -260,9 +260,10 @@ def compute_angular_velocity(self):
 def calculate_pwm_auto(self, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading, Kf=2.5, Kd=0.318, Ki=0.1, dt=0.2):
     try:
         
-        v_measured = self.current_value["velocity"]
-        omega_measured = -compute_angular_velocity(self) # deg
-        # print("current v,w : ", v_measured, omega_measured) 
+        v_measured = self.current_value["forward_velocity"]
+        omega_measured = -self.current_value["rotational_velocity"] * math.pi / 180 # deg
+        # omega_measured = -compute_angular_velocity(self) # deg
+        print("current v,w : ", v_measured, omega_measured) 
         print("desired v,w(rad) : ", self.linear_x, self.angular_z) # rad
         
         if self.linear_x == 0 and self.angular_z == 0:
@@ -276,7 +277,6 @@ def calculate_pwm_auto(self, current_latitude, current_longitude, destination_la
         omega_control, self.prev_error_omega, self.integral_omega = compute_pid(
             self.angular_z, omega_measured, dt, self.current_value["coeff_kw_p"], self.current_value["coeff_kw_i"], self.current_value["coeff_kw_d"],
             self.prev_error_omega, self.integral_omega)
-        
 
         b = 0.295  # 바퀴 사이 거리
         k_L = 0.2217  # 왼쪽 바퀴 계수

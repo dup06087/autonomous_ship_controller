@@ -21,7 +21,7 @@ class ICPTest:
         self.current_y = 0.0
         self.current_z = 0.0
         self.current_heading = 0.0  # Heading in degrees
-
+        self.prev_data_time = rospy.Time.now()
         self.log_file = open("position_log.txt", "w")
 
         # Initialize previous values for tracking
@@ -58,12 +58,11 @@ class ICPTest:
                 print("icp update value error : ", e)
                 
     def lidar_callback(self, data):
-        return 0
-    
+        # return 0
         prev_time = time.time()
         # Check if the timestamp is too old
         time_diff = rospy.Time.now() - data.header.stamp
-        if time_diff.to_sec() > 0.05:  # Adjust this threshold as needed
+        if time_diff.to_sec() > 0.1:  # Adjust this threshold as needed
             return
         try:
             # Check if any required value is None in mother_instance.current_value
@@ -123,6 +122,7 @@ class ICPTest:
                         heading_change = np.degrees(rotation_euler[2])  # Yaw change in degrees
                         heading_change = math.trunc(heading_change * 10) / 10
                         
+                        
                         self.current_heading = self.prev_value['heading'] - heading_change
                         if self.current_heading > 180:
                             self.current_heading -= 360
@@ -149,6 +149,9 @@ class ICPTest:
                             self.prev_value['heading']
                         )
                         
+                        angular_velocity = heading_change / (data.header.stamp - self.prev_data_time).to_sec()
+                        forward_velocity = self.current_x / (data.header.stamp - self.prev_data_time).to_sec()
+
                         self.prev_value['latitude'] = round(lat, 8)
                         self.prev_value['longitude'] = round(lon, 8)
                         self.prev_value['heading'] = round(self.current_heading, 2)
@@ -156,10 +159,14 @@ class ICPTest:
                         self.mother_instance.current_value['latitude'] = round(lat, 8)
                         self.mother_instance.current_value['longitude'] = round(lon, 8)
                         self.mother_instance.current_value['heading'] = round(self.current_heading, 2)
-                        
+                        self.mother_instance.current_value['rotational_velocity'] = round(angular_velocity, 2)
+                        self.mother_instance.current_value['forward_velocity'] = round(forward_velocity, 2)
+
                         self.mother_instance.serial_gnss_cpy.current_value['latitude'] = round(lat, 8)
                         self.mother_instance.serial_gnss_cpy.current_value['longitude'] = round(lon, 8)
                         self.mother_instance.serial_gnss_cpy.current_value['heading'] = round(self.current_heading, 2)
+                        self.mother_instance.serial_gnss_cpy.current_value['rotational_velocity'] = round(angular_velocity, 2)
+                        self.mother_instance.serial_gnss_cpy.current_value['forward_velocity'] = round(forward_velocity, 2)
                         
                     else: 
                         print("fitness low")
@@ -167,8 +174,10 @@ class ICPTest:
                 self.prev_scan = cloud
                 
         except Exception as e:
-            print('lidar callback error : ', e)
+            print('icp exception error : ', e)
             self.mother_instance.serial_gnss_cpy.flag_gnss = False
+        
+        self.prev_data_time = data.header.stamp
         
         print("ICP time consuming : ", time.time()-prev_time)
 

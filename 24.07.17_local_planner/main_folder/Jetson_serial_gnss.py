@@ -16,7 +16,7 @@ class serial_gnss:
         self.receive_queue = Queue()
         self.running = True
 
-        self.current_value = {'validity' : None, 'latitude' : None, 'longitude' : None, 'velocity' : None, 'date' :  None, 'time' : None, 'heading' : None, 'pitch' : None}
+        self.current_value = {'validity' : None, 'latitude' : None, 'longitude' : None, 'velocity' : None, 'date' :  None, 'time' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None}
 
         # self.sender_to_lidar = Jetson_gps_send_to_gnss.UdpBroadcaster(10110)
 
@@ -119,13 +119,10 @@ class serial_gnss:
                         print("gnss variable line : ", line)  ## must be one value
 
                 try:
-                    if len(lines) >=3:
-                        line_ = [lines[-2], lines[-1]]
+                    if len(lines) >= 5:
+                        line_ = [lines[-4],lines[-3],lines[-2], lines[-1]]
                         # print("here12")
-                    elif len(lines) == 2:
-                        line_ = lines
-                        # print("here13")
-                    elif len(lines) == 1:
+                    elif len(lines) < 4 and len(lines) >= 1:
                         line_ = lines
                         # print("here14")
                     else:
@@ -199,12 +196,18 @@ class serial_gnss:
             if header in ['$GPRMC', '$GNRMC', '$GARMC']:
                 self._process_gnrmc_data(tokens)
 
-                # self.send_to_lidar(decoded_data)
                 # print("gnrmc_data processing done")
                 
             elif header == '$PSSN':  # HRP
                 self._process_pssn_data(tokens)
                 # print("pssn_data processing done")
+                
+            elif header in ['$GPROT', '$GNROT', '$GAROT']:
+                self._process_rot_data(tokens)
+            
+            elif header in ['$GPVTG', '$GNVTG', '$GAVTG']:
+                self._process_vgt_data(tokens)
+            
             else:
                 print("gnss header : ", header)
                 print("GNSS 데이터 오류 발생 : ", header)
@@ -212,11 +215,32 @@ class serial_gnss:
 
         except Exception as e:
             print(f"Error processing gnss data: {e}")
+            
+    def _process_rot_data(self, tokens):
+        try:
+            rotateional_token = tokens[1]
+            if rotateional_token == '':
+                if not self.boat.icp_test_cpy.flag_execute: # icp 실행 안될때
+                    self.current_value['rotational_velocity'] = None
+            else:
+                if not self.boat.icp_test_cpy.flag_execute: # icp 실행 안될때
+                    self.current_value['rotational_velocity'] = round(float(rotateional_token) / 60, 2)
+                    
+        except ValueError as e:
+            print(f"Error processing gnrot data: {e}")
 
-    def send_to_lidar(self, GPS_data):
-        self.sender_to_lidar.send_data(GPS_data)
-        # print("sended to lidar")
 
+    def _process_vgt_data(self, tokens):
+        try:
+            cog_token = tokens[3]
+            if cog_token == '':
+                self.current_value['COG'] = None
+            else:
+                self.current_value['COG'] = float(cog_token)
+                
+        except ValueError as e:
+            print(f"Error processing gnvgt data: {e}")
+            
     def _process_gnrmc_data(self, tokens):
         try:
             validity = tokens[2]
@@ -246,10 +270,10 @@ class serial_gnss:
             # LPF 적용
             # filtered_lat = self.apply_low_pass_filter('latitude', new_lat)
             # filtered_lon = self.apply_low_pass_filter('longitude', new_lon)
-            if not self.boat.icp_test_cpy.flag_execute:
+            if not self.boat.icp_test_cpy.flag_execute: # icp 실행 안될때
                 self.current_value['latitude'] = round(new_lat, 8)
                 self.current_value['longitude'] = round(new_lon, 8)
-            else:
+            else: # 처음부터 값이 안들어왔을 때에는, gnss 값 초기화
                 if self.current_value['latitude'] == None:
                     self.current_value['latitude'] = round(new_lat, 8)
                     self.current_value['longitude'] = round(new_lon, 8)
@@ -299,13 +323,34 @@ class serial_gnss:
         
 
 if __name__ == "__main__":
+    class boat:
+        def __init__(self):
+            self.log_folder_path = self.create_log_folder()
+
+
+        def create_log_folder(self):
+            # Create folder path based on the current year, month-date, and time
+            current_time = datetime.now()
+            year = current_time.strftime("%Y")
+            month_date = current_time.strftime("%m-%d")
+            time = current_time.strftime("%H%M")
+            folder_path = os.path.join("gnss_test_log", year, month_date, time)
+            
+            # Ensure the folder exists
+            if not os.path.exists(folder_path):
+                os.makedirs(folder_path)
+                print("log file maked : {}".format(folder_path))
+            
+            return folder_path
+    
+    temp_boat = boat()
     serial_cpy = None
     serial_cpy_thread = None
     cnt = 0
     gnss_lock =  threading.Lock()
     try:
-        # serial_cpy = serial_gnss("/dev/ttyACM2") # origin name
-        serial_cpy = serial_gnss("/dev/tty_septentrio0", gnss_lock, 1) # tty fixed name
+        serial_cpy = serial_gnss("/dev/ttyACM2", gnss_lock, 1, temp_boat) # origin name
+        # serial_cpy = serial_gnss("/dev/tty_septentrio0", gnss_lock, 1) # tty fixed name
         # serial_cpy = serial_gnss("/dev/pts/5", gnss_lock, 1) # Virtual Port 
         serial_cpy_thread = threading.Thread(target=serial_cpy.run)
         serial_cpy_thread.start()
@@ -314,6 +359,9 @@ if __name__ == "__main__":
         print("gnss error : ", e)
             
     while True:
-        print(serial_cpy.current_value)
-        time.sleep(1)
+        try:
+            print(serial_cpy.current_value)
+            time.sleep(1)
+        except:
+            pass
         

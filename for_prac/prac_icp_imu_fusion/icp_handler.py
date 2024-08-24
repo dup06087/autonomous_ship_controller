@@ -8,17 +8,19 @@ import numpy as np
 import math
 import time
 from utils import log_message
+import json
 
 class ICPHandler:
     def __init__(self, gnss_handler, experiment_folder):
-        self.gnss_handler = gnss_handler
+        # self.gnss_handler = gnss_handler
         self.experiment_folder = experiment_folder
         self.icp_data_file = os.path.join(self.experiment_folder, "icp.txt")
         self.prev_scan = None
         self.prev_heading_change = 0
         self.prev_x_change = 0
-
-         
+        self.log_list = []
+        self.prev_time_icp_consuming = None
+        
         d = 0.2  # 로봇이 x축으로 이동한 예상 거리 (단위: meters)
         self.icp_initial_guess = np.array([[1, 0, 0, d],
                                    [0, 1, 0, 0],
@@ -34,17 +36,21 @@ class ICPHandler:
         # self.prev_heading = self.current_heading
 
         self.log_file = open(self.icp_data_file, "w")
-        self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=2)
+        self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=1)
         
         
 
     def initialize_position(self):
         """유효한 GNSS 값을 받을 때까지 대기하며 초기화"""
         while True:
+            """ original
             latitude = self.gnss_handler.current_value['latitude']
             longitude = self.gnss_handler.current_value['longitude']
             heading = self.gnss_handler.current_value['heading']
-            
+            """
+            latitude = 37.63319989
+            longitude = 127.0779798 
+            heading = 87.997
             
             if latitude is not None and longitude is not None and heading is not None:
                 self.prev_latitude = latitude
@@ -79,19 +85,61 @@ class ICPHandler:
         # 필터링된 포인트들을 GPU로 다시 전송
         filtered_pcd = o3d.t.geometry.PointCloud(o3c.Tensor(filtered_pcd_tensor, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
         return filtered_pcd
+    
+    def icp_callback(self, status):
+        try:
+            current_time = time.time()
+            time_consumed = current_time - self.prev_time_icp_consuming
+            # Extracting information from the status dictionary
+            iteration_index = status['iteration_index'].item()
+            fitness = status['fitness'].cpu().item()
+            inlier_rmse = status['inlier_rmse'].cpu().item()
+            # transformation = status['transformation'].cpu().numpy()
 
+            # Create a log message
+            log_data = {
+                'iteration_index': iteration_index,
+                'fitness': fitness,
+                'inlier_rmse': inlier_rmse,
+                'time_consumed' : time_consumed
+                # 'transformation': transformation.tolist()  # Convert numpy array to list for easier logging
+            }
+            
+            self.log_list.append(log_data)
+            
+            print("log data : ", log_data)
+            print(f"Iteration: {iteration_index}, Fitness: {fitness}, Inlier RMSE: {inlier_rmse}, Time Consumed: {time_consumed}")
+            # print(f"Transformation:\n{transformation}")
+            self.prev_time_icp_consuming = current_time
+            
+        except Exception as e:
+            print("icp callback error : ", e)
+            
+            
+    def save_current_log_callback(self):
+        try:         
+            log_file = os.path.join(self.experiment_folder, "icp_log.txt")
+            with open(log_file, 'a') as f:
+                f.write(f"{self.log_list}\n")
+
+            self.log_list = []
+        except Exception as e:
+            print("icp callback error : ", e)
+            
     def lidar_callback(self, data):
-        # prev_time = time.time()
-        time_diff = rospy.Time.now() - data.header.stamp
-        if time_diff.to_sec() > 0.05:
-            # print("f")
+        prev_time = time.time()
+        # time_diff = rospy.Time.now() - data.header.stamp
+        ros_time_now = rospy.get_rostime()
+        time_diff = ros_time_now - data.header.stamp    
+        if time_diff.to_sec() > 0.1:
+            print("f : ", time_diff.to_sec())
             return
 
         try:
             cloud = self.point_cloud2_to_o3d(data)
 
-            min_bound = np.array([-50, -50, -0.5])
-            max_bound = np.array([50, 50, 2])
+            min_bound = np.array([-10, -10, -0.5])
+            max_bound = np.array([10, 10, 2])
             cloud = self.crop_roi(cloud, min_bound, max_bound)
             ship_body_bounds = {'min': [-2, -2, -0.6], 'max': [2, 2, 0.31]}
             cloud = self.remove_ship_body(cloud, ship_body_bounds)
@@ -110,14 +158,23 @@ class ICPHandler:
                 #     self.icp_initial_guess,
                 #     o3d.pipelines.registration.TransformationEstimationPointToPoint())
                 # transf = reg_p2p.transformation
-
+                
+                self.prev_time_icp_consuming = time.time()
                 reg_gicp = o3d.t.pipelines.registration.icp(
                     source=cloud, 
                     target=self.prev_scan,
                     max_correspondence_distance=0.5,
                     init_source_to_target=self.icp_initial_guess,
                     estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPoint(),
+                    criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(
+                        relative_fitness=1e-6,
+                        relative_rmse=1e-6,
+                        max_iteration=50
+                    ),
+                    callback_after_iteration=self.icp_callback
                 )
+                self.save_current_log_callback()
+                
                 transf = reg_gicp.transformation.cpu().numpy()  # Convert the result back to a numpy array
 
 
@@ -174,7 +231,7 @@ class ICPHandler:
         except Exception as e:
             log_message(f"ICP error: {e}")
 
-        # log_message(f"ICP time: {time.time() - prev_time}")
+        log_message(f"ICP time: {time.time() - prev_time}")
 
     def floor_to_eight_decimal_places(self, value):
         return math.trunc(value * 10**2) / 10**2
@@ -253,7 +310,7 @@ class ICPHandler:
         cloud = o3d.t.geometry.PointCloud(o3c.Tensor(np.array(points), dtype=o3c.float32, device=o3c.Device("CUDA:0")))
         return cloud
 
-    def downsample(self, cloud, voxel_size=0.05):
+    def downsample(self, cloud, voxel_size=0.1):
         return cloud.voxel_down_sample(voxel_size)
 
     def rotation_matrix_to_euler(self, rotation_matrix):
@@ -275,7 +332,7 @@ class ICPHandler:
 
 if __name__ == "__main__":
     rospy.init_node("icp_node")
-    gnss_handler = GNSSHandler()  # Assumes this class is defined elsewhere
+    # gnss_handler = GNSSHandler()  # Assumes this class is defined elsewhere
     experiment_folder = "/path/to/experiment_folder"  # Set the correct path
     icp_handler = ICPHandler(gnss_handler, experiment_folder)
     icp_handler.run()

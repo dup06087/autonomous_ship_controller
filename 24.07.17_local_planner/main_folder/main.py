@@ -5,7 +5,7 @@ from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
 from Jetson_lidar_execution_gpu import PointCloudProcessor
 from prac_ICP_gpu import ICPTest
-from pub_twist import VelocityPublisher
+from pub_twist_by_gnss import VelocityPublisher
 
 # from auto_drive import auto_drive
 from auto_drive_dynamics import auto_drive
@@ -41,8 +41,8 @@ class boat:
             'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving
             "waypoint_lat_m" : None, "waypoint_lon_m" : None,
             # gnss get params below
-            'velocity': None, 'heading': 0, 'roll': None, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None,
-            "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0,
+            'velocity': None, 'heading': 0, 'forward_velocity': None, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None, 
+            "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0, 'COG' : None, 'rotational_velocity' : None,
             "arrived" : False, "flag_autodrive" : False
             # gnss end
             } # cf. com_status undefined
@@ -345,12 +345,12 @@ class boat:
             self.current_value.update(self.serial_gnss_cpy.current_value)
 
         # GPS 데이터를 업데이트
-        gps_data = {
-            'latitude': self.current_value['latitude'],
-            'longitude': self.current_value['longitude'],
-            'heading': self.current_value['heading']
-        }
-        self.gps_publisher.update_gps_data(gps_data)  # GPS 데이터를 GPSPublisher에 전달
+        # gps_data = {
+        #     'latitude': self.current_value['latitude'],
+        #     'longitude': self.current_value['longitude'],
+        #     'heading': self.current_value['heading']
+        # }
+        # self.gps_publisher.update_gps_data(gps_data)  # GPS 데이터를 GPSPublisher에 전달
 
         self.send_pitch_to_lidar(pitch = self.current_value['pitch'])
     
@@ -460,12 +460,12 @@ class boat:
         self.pub_twist_thread()
         
         self.goal_publishing_thread()
-        try:
-            self.gps_publisher = GPSPublisher()  # GPSPublisher 인스턴스 생성
-            self.gps_publisher.start()  # GPS 데이터를 publish하는 스레드 시작
-            print("self.gps+publisher executed")
-        except Exception as e:
-            print("gps publisher eror : ", e)
+        # try:
+        #     self.gps_publisher = GPSPublisher()  # GPSPublisher 인스턴스 생성
+        #     self.gps_publisher.start()  # GPS 데이터를 publish하는 스레드 시작
+        #     print("self.gps+publisher executed")
+        # except Exception as e:
+        #     print("gps publisher eror : ", e)
         
         self.auto_driving() # block in while
         
@@ -510,7 +510,7 @@ class boat:
                 
                 time_prev = time_
             
-            time.sleep(0.05) # if time.sleep doesn't exit > time overloading
+            time.sleep(1) # if time.sleep doesn't exit > time overloading
             
                 
 Boat = boat()

@@ -16,7 +16,7 @@ class PointCloudProcessor:
         self.bbox_lists = []
         self.pitch = None
         self.vff_force = 0.2
-        self.voxel_size = 0.01
+        self.voxel_size = 0.1
         self.lock = Lock()
 
     def update_coeff(self, coeff_kv_p, coeff_kv_i, coeff_kv_d, coeff_kw_p, coeff_kw_i, coeff_kw_d, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
@@ -152,7 +152,7 @@ class PointCloudProcessor:
         pcd = self.rotate_point_cloud_by_pitch(pcd)
 
         # ship_body_bounds = {'min': [-1.1, -1, -0.6], 'max': [1.1, 1, 0.31]}
-        ship_body_bounds = {'min': [-5, -5, -0.6], 'max': [5, 5, 0.31]}
+        ship_body_bounds = {'min': [-5, -5, -2], 'max': [5, 5, 2]}
         pcd = self.remove_ship_body(pcd, ship_body_bounds)
 
         points_cpu = pcd.point.positions.to(o3c.Device("CPU:0")).numpy()
