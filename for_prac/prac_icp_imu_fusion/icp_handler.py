@@ -169,7 +169,7 @@ class ICPHandler:
                     criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(
                         relative_fitness=1e-6,
                         relative_rmse=1e-6,
-                        max_iteration=50
+                        max_iteration=10
                     ),
                     callback_after_iteration=self.icp_callback
                 )
@@ -227,6 +227,7 @@ class ICPHandler:
                     # print("done")
                 else:
                     log_message("ICP fitness low")
+                    
             self.prev_scan = cloud
         except Exception as e:
             log_message(f"ICP error: {e}")
