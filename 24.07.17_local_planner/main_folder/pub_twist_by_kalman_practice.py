@@ -34,7 +34,7 @@ class ImuKalmanFilterNode:
         # 공분산 행렬 (Covariance Matrix)
         self.kf.P *= 1000.  # 초기 불확실성
         self.kf.R = np.eye(3) * 0.00005  # 측정 불확실성 (가속도 및 각속도에 대한 노이즈)
-        self.kf.Q = np.eye(8) * 1  # 프로세스 노이즈
+        self.kf.Q = np.eye(8) * 10  # 프로세스 노이즈
 
         # 로그 파일 초기화
         self.log_file = open("position_log.txt", "w")
