@@ -246,15 +246,16 @@ class ICPHandler:
 
     def calculate_new_position(self, lat, lon, delta_x, delta_y, heading):
         # Convert degrees to radians
-        if heading > 180:
-            heading -= 360
+        # if heading > 180:
+        #     heading -= 360
             
-        heading_rad = math.radians(-heading)
+        # heading_rad = math.radians(-heading)
         # delta_north = delta_x * math.cos(heading_rad) - delta_y * math.sin(heading_rad)
         # delta_east = -delta_x * math.sin(heading_rad) - delta_y * math.cos(heading_rad)
-        delta_north = delta_x * math.cos(heading_rad) - delta_y * math.sin(heading_rad)
-        delta_east = -delta_x * math.sin(heading_rad) - delta_y * math.cos(heading_rad)
         
+        heading_rad = math.radians(heading)
+        delta_north = delta_x * math.cos(heading_rad) - -delta_y * math.sin(heading_rad)
+        delta_east = delta_x * math.sin(heading_rad) + -delta_y * math.cos(heading_rad)
         
         # Earth radius in meters
         R = 6378137.0
