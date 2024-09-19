@@ -48,9 +48,10 @@ class ICPHandler:
             longitude = self.gnss_handler.current_value['longitude']
             heading = self.gnss_handler.current_value['heading']
             """
-            latitude = 37.63319989
-            longitude = 127.0779798 
-            heading = 87.997
+
+            latitude = 37.62888010
+            longitude = 127.0784448
+            heading = 334.436
             
             if latitude is not None and longitude is not None and heading is not None:
                 self.prev_latitude = latitude
@@ -108,7 +109,7 @@ class ICPHandler:
             self.log_list.append(log_data)
             
             print("log data : ", log_data)
-            print(f"Iteration: {iteration_index}, Fitness: {fitness}, Inlier RMSE: {inlier_rmse}, Time Consumed: {time_consumed}")
+            # print(f"Iteration: {iteration_index}, Fitness: {fitness}, Inlier RMSE: {inlier_rmse}, Time Consumed: {time_consumed}")
             # print(f"Transformation:\n{transformation}")
             self.prev_time_icp_consuming = current_time
             
@@ -163,7 +164,7 @@ class ICPHandler:
                 reg_gicp = o3d.t.pipelines.registration.icp(
                     source=cloud, 
                     target=self.prev_scan,
-                    max_correspondence_distance=0.5,
+                    max_correspondence_distance=1.5,
                     init_source_to_target=self.icp_initial_guess,
                     estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPoint(),
                     criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(
@@ -224,6 +225,7 @@ class ICPHandler:
                     self.prev_heading = current_heading
                     self.prev_heading_change = heading_change
                     self.prev_x_change = current_x
+                    self.prev_y_change = current_y
                     # print("done")
                 else:
                     log_message("ICP fitness low")

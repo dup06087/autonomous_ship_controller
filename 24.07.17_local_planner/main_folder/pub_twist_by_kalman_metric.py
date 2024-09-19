@@ -125,29 +125,45 @@ class ImuKalmanFilterNode:
         orientation = msg.orientation
         roll, pitch, yaw = self.quaternion_to_euler(orientation.x, orientation.y, orientation.z, orientation.w)
 
-        ##### 선형 속도 구하기
+        ##### 선형 가속도 보정 (Linear Acceleration Correction)
         linear_acceleration = msg.linear_acceleration
-        accel_corrected = self.rotate_acceleration(linear_acceleration.x, linear_acceleration.y, linear_acceleration.z, roll, pitch, yaw)
-        
-        # 관측 벡터 생성 (보정된 가속도 및 자이로 데이터)
-        z = np.array([accel_corrected[0], 
-                      accel_corrected[1], 
-                      msg.angular_velocity.z])
+        accel_corrected = self.rotate_acceleration(
+            linear_acceleration.x, 
+            linear_acceleration.y, 
+            linear_acceleration.z, 
+            roll, pitch, yaw
+        )
 
-        # 칼만 필터 예측
+        ##### 관측 벡터 생성 (보정된 가속도 및 자이로 데이터)
+        z = np.array([
+            accel_corrected[0],  # x-축 가속도
+            accel_corrected[1],  # y-축 가속도
+            msg.angular_velocity.z  # z-축 각속도 (yaw rate)
+        ])
+
+        ##### 칼만 필터 예측 단계
         self.kf.predict()
 
-        # 칼만 필터 업데이트
+        ##### 칼만 필터 업데이트 단계
         self.kf.update(z)
 
+        ##### 필터링된 위치 및 속도 계산
+        p_x, p_y = self.kf.x[0], self.kf.x[1]
+        v_x, v_y = self.kf.x[3], self.kf.x[4]
+        heading_rad = math.radians(yaw)
+
+        # 헤딩을 고려한 좌표 변환
+        delta_x_corrected = p_x * math.cos(heading_rad) - -p_y * math.sin(heading_rad)
+        delta_y_corrected = p_x * math.sin(heading_rad) + -p_y * math.cos(heading_rad)
+
         # 필터링된 위치를 로그로 남김
-        p_x, p_y, v_x, a_x = self.kf.x[0], self.kf.x[1], self.kf.x[3], self.kf.x[6]
-        self.log_file.write(f"{p_x},{p_y}\n")
+        self.log_file.write(f"{delta_x_corrected},{delta_y_corrected}\n")
 
         # 필터링된 상태 출력
-        rospy.loginfo("Kalman Filtered State: p_x={:.2f}, v_y={:.2f}, a_x={:.2f}".format(p_x, v_x, a_x))
-        # rospy.loginfo(f"Raw data: a_x={msg.linear_acceleration.x}, a_y={msg.linear_acceleration.y}, angular_velocity_z={msg.angular_velocity.z}")
-        # rospy.loginfo(f"rpy corrected data : a_x={accel_corrected[0]}, a_y={accel_corrected[1]}")
+        rospy.loginfo(f"Kalman Filtered Position: x={delta_x_corrected:.2f}, y={delta_y_corrected:.2f}")
+        rospy.loginfo(f"Velocity: v_x={v_x:.2f}, v_y={v_y:.2f}")
+
+        
     def __del__(self):
         self.log_file.close()
         

@@ -125,7 +125,6 @@ class VelocityPublisher:
         return corrected_angular_velocity
     
     def imu_callback(self, data):
-        # print(data)
         current_time = rospy.Time.now()
         delta_time = (current_time - self.previous_time).to_sec()
 
@@ -134,25 +133,19 @@ class VelocityPublisher:
         roll, pitch, yaw = self.quaternion_to_euler(orientation.x, orientation.y, orientation.z, orientation.w)
 
         ##### 선형 속도 구하기
-
         linear_acceleration = data.linear_acceleration
         corrected_acc = self.rotate_acceleration(linear_acceleration.x, linear_acceleration.y, linear_acceleration.z, roll, pitch, yaw)
-        # 선형 속도 계산 (이전 속도 + 보정된 가속도 * 시간)
         
-        linear_acc_x_trunc = (corrected_acc[0])
-        linear_acc_y_trunc = (corrected_acc[1])
-        self.linear_velocity_x += (linear_acc_x_trunc * delta_time )
-        self.linear_velocity_y += (linear_acc_y_trunc * delta_time )
+        # 선형 속도 계산 (이전 속도 + 보정된 가속도 * 시간)
+        linear_acc_x_trunc = corrected_acc[0]
+        linear_acc_y_trunc = corrected_acc[1]
+        self.linear_velocity_x += linear_acc_x_trunc * delta_time
+        self.linear_velocity_y += linear_acc_y_trunc * delta_time
 
         # 이동 거리 계산 (미터 단위)
-        delta_x = (self.linear_velocity_x * delta_time )  # 선박의 정면 방향 이동 거리
-        delta_y = (self.linear_velocity_y * delta_time )  # 선박의 왼쪽 측면 방향 이동 거리
+        delta_x = self.linear_velocity_x * delta_time  # X축 방향 이동 거리
+        delta_y = self.linear_velocity_y * delta_time  # Y축 방향 이동 거리
         
-        print("self.linear_acc_x_trunc : ", linear_acc_x_trunc)
-        print("self.linear_acc_y_trunc : ", linear_acc_y_trunc)
-        print("self.linear_velocity_x : ", self.linear_velocity_x)
-        print("self.linear_velocity_y : ", self.linear_velocity_y)
-        print("delta_x, delta_y : ", delta_x, delta_y)
         ##### 각속도 데이터
         angular_velocity = data.angular_velocity
         corrected_angular_velocity = self.rotate_angular_velocity(
@@ -161,64 +154,37 @@ class VelocityPublisher:
         )
 
         # Here we use the corrected angular velocity for heading calculation
-        angular_velocity_z_rad = corrected_angular_velocity[2] # Z-axis (yaw) component # rad
-        # print("rad angular_velocity : ", angular_velocity_z_rad)
+        angular_velocity_z_rad = corrected_angular_velocity[2]  # Z-axis (yaw) component in radians
         angular_velocity_z = math.degrees(angular_velocity_z_rad)
         
         self.current_heading -= angular_velocity_z * delta_time
         self.current_heading = self.current_heading % 360
-        # print("heading : ", self.current_heading)
-        ##### 위도, 경도 업데이트
         
+        ##### Position 업데이트 (x, y) in metric units
         heading_rad = math.radians(self.current_heading)
-        # print("heading rad : ", heading_rad)
         
-        self.sum_x += delta_x
-        self.sum_y += delta_y
-        print("delta_x : ", self.sum_x)
+        delta_x_corrected = delta_x * math.cos(heading_rad) - -delta_y * math.sin(heading_rad)
+        delta_y_corrected = delta_x * math.sin(heading_rad) + -delta_y * math.cos(heading_rad)
         
-        
-        
-        # delta_x_corrected = delta_x * math.cos(heading_rad) - (-delta_y) * math.sin(heading_rad)
-        # delta_y_corrected = delta_x * math.sin(heading_rad) + (-delta_y) * math.cos(heading_rad)        
-        
-        # delta_latitude = delta_x_corrected / self.earth_radius
-        # delta_longitude = delta_y_corrected / (self.earth_radius * math.cos(math.radians(self.current_latitude)))
+        # x, y positions are updated using the corrected deltas
+        self.sum_x += delta_x_corrected
+        self.sum_y += delta_y_corrected
 
-        # self.current_latitude += math.degrees(delta_latitude)
-        # self.current_longitude += math.degrees(delta_longitude)
-
+        # Print debug information
+        print("linear_acc_x_trunc:", linear_acc_x_trunc)
+        print("linear_acc_y_trunc:", linear_acc_y_trunc)
+        print("linear_velocity_x:", self.linear_velocity_x)
+        print("linear_velocity_y:", self.linear_velocity_y)
+        print("delta_x, delta_y:", delta_x, delta_y)
+        print("Corrected delta_x, delta_y:", delta_x_corrected, delta_y_corrected)
+        print("Cumulative Position -> X:", self.sum_x, " Y:", self.sum_y)
+        
+        # Save the cumulative position to a log file
+        self.log_file.write(f"{self.sum_x},{self.sum_y}\n")
+        
+        # Update the previous time for the next iteration
         self.previous_time = current_time
 
-        # # Odometry 메시지 생성 및 퍼블리시
-        # odom = Odometry()
-        # odom.header.stamp = current_time
-        # odom.header.frame_id = "odom"
-
-        # # Odometry 메시지의 orientation을 heading으로 설정
-        # quaternion = self.heading_to_quaternion(self.current_heading)
-        # odom.pose.pose.orientation = quaternion
-
-        # # 위치를 위도, 경도로 설정
-        # odom.pose.pose.position.x = 0
-        # odom.pose.pose.position.y = 0
-        # odom.pose.pose.position.z = 0  # 고도 정보는 생략
-
-        # # Set the velocity
-        # odom.child_frame_id = "base_link"
-        # odom.twist.twist.linear.x = self.linear_velocity_x
-        # odom.twist.twist.linear.y = self.linear_velocity_y
-        # odom.twist.twist.angular.z = angular_velocity_z_rad
-
-        # self.pub.publish(odom)
-
-        # # 로그 기록
-        # log_entry = {
-        #     "lat": self.current_latitude,
-        #     "lon": self.current_longitude,
-        #     "heading": self.current_heading
-        # }
-        self.log_file.write(f"{self.sum_x},{self.sum_y}\n")
 
     def heading_to_quaternion(self, heading):
         # heading (yaw) 값을 quaternion으로 변환

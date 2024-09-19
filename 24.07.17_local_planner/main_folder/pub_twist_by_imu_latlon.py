@@ -15,15 +15,15 @@ class VelocityPublisher:
         rospy.Subscriber('/imu/data', Imu, self.imu_callback)
         self.previous_time = rospy.Time.now()
 
-        # 초기 위도, 경도, heading 설정 (예시값 사용)
-        self.initial_latitude =  37.62918851  # 초기 위도
-        self.initial_longitude = 127.07945248  # 초기 경도
-        self.initial_heading = 0  # 초기 heading, 단위는 라디안
-
+        latitude = 37.6288801
+        longitude = 127.07844481
+        heading = 334.436
+            
+            
         # 현재 위치 및 heading 초기화
-        self.current_latitude = self.initial_latitude
-        self.current_longitude = self.initial_longitude
-        self.current_heading = self.initial_heading
+        self.current_latitude = latitude
+        self.current_longitude = longitude
+        self.current_heading = heading
 
         # 속도 초기화
         self.linear_velocity_x = 0.0
@@ -145,12 +145,7 @@ class VelocityPublisher:
         # 이동 거리 계산 (미터 단위)
         delta_x = math.trunc(self.linear_velocity_x * delta_time * 100)/100  # 선박의 정면 방향 이동 거리
         delta_y = math.trunc(self.linear_velocity_y * delta_time * 100)/100  # 선박의 왼쪽 측면 방향 이동 거리
-        
-        print("self.linear_acc_x_trunc : ", linear_acc_x_trunc)
-        print("self.linear_acc_y_trunc : ", linear_acc_y_trunc)
-        print("self.linear_velocity_x : ", self.linear_velocity_x)
-        print("self.linear_velocity_y : ", self.linear_velocity_y)
-        print("delta_x, delta_y : ", delta_x, delta_y)
+
         ##### 각속도 데이터
         angular_velocity = data.angular_velocity
         corrected_angular_velocity = self.rotate_angular_velocity(
@@ -160,16 +155,13 @@ class VelocityPublisher:
 
         # Here we use the corrected angular velocity for heading calculation
         angular_velocity_z_rad = math.trunc(corrected_angular_velocity[2] * 100) / 100  # Z-axis (yaw) component # rad
-        print("rad angular_velocity : ", angular_velocity_z_rad)
         angular_velocity_z = math.degrees(angular_velocity_z_rad)
         
         self.current_heading -= angular_velocity_z * delta_time
         self.current_heading = self.current_heading % 360
-        print("heading : ", self.current_heading)
         ##### 위도, 경도 업데이트
         
         heading_rad = math.radians(self.current_heading)
-        print("heading rad : ", heading_rad)
         
         delta_x_corrected = delta_x * math.cos(heading_rad) - (-delta_y) * math.sin(heading_rad)
         delta_y_corrected = delta_x * math.sin(heading_rad) + (-delta_y) * math.cos(heading_rad)        
@@ -211,6 +203,15 @@ class VelocityPublisher:
             "heading": self.current_heading
         }
         self.log_file.write(f"{log_entry}\n")
+                
+        print("self.linear_acc_x_trunc : ", linear_acc_x_trunc)
+        print("self.linear_acc_y_trunc : ", linear_acc_y_trunc)
+        print("self.linear_velocity_x : ", self.linear_velocity_x)
+        print("self.linear_velocity_y : ", self.linear_velocity_y)
+        print("delta_x, delta_y : ", delta_x, delta_y)
+        print("rad angular_velocity : ", angular_velocity_z_rad)
+        print("heading : ", self.current_heading)
+        print("heading rad : ", heading_rad)
 
     def heading_to_quaternion(self, heading):
         # heading (yaw) 값을 quaternion으로 변환
