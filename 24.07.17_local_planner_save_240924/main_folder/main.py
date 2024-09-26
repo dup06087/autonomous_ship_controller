@@ -4,7 +4,7 @@ from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
 from Jetson_lidar_execution_gpu import PointCloudProcessor
-from ICP_IMU import ICPHandler, IMUCorrector
+from prac_ICP_gpu import ICPTest
 from pub_twist_by_gnss import VelocityPublisher
 
 # from auto_drive import auto_drive
@@ -19,7 +19,7 @@ from nav_msgs.msg import Path
 
 import signal
 import sys
-# from costmap_gps_publisher import GPSPublisher
+from costmap_gps_publisher import GPSPublisher
 
 import os
 
@@ -38,8 +38,7 @@ class boat:
             "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0,
             # pc get params
             'mode_chk': "SELF", 'pwml_chk': None, 'pwmr_chk': None, # nucleo get params
-            'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, 
-            "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving 
+            'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving
             "waypoint_lat_m" : None, "waypoint_lon_m" : None,
             # gnss get params below
             'velocity': None, 'heading': 0, 'forward_velocity': None, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None, 
@@ -150,21 +149,11 @@ class boat:
 
     def ICP_thread(self):
         try:
-            imu_corrector = IMUCorrector(self)
-            icp_handler = ICPHandler(self, imu_corrector)
-
-            # 각각의 클래스를 스레드로 실행
-            imu_thread = threading.Thread(target=imu_corrector.run)
-            icp_thread = threading.Thread(target=icp_handler.run)
-
-            imu_thread.start()
-            icp_thread.start()
-            
-            # self.icp_test_cpy = ICPHandler(self)
-            # self.icp_test_cpy_thread = threading.Thread(target=self.icp_test_cpy.run)
-            # self.icp_test_cpy_thread.start()
+            self.icp_test_cpy = ICPTest(self)
+            self.icp_test_cpy_thread = threading.Thread(target=self.icp_test_cpy.run)
+            self.icp_test_cpy_thread.start()
         except Exception as e:
-            print(f"Exception in icp_thread: {e}")
+            print(f"Exception in nucleo_thread: {e}")
             
     def pc_socket_thread(self):
         try:
@@ -353,23 +342,8 @@ class boat:
             
     def update_gnss_data(self):
         with self.gnss_lock:
-            if all(value is not None for value in self.serial_gnss_cpy.current_value.values()):
-                self.current_value.update(self.serial_gnss_cpy.current_value)
-                self.flag_icp_execute = False
-                self.cnt_gnss_signal_error = 0
-                self.serial_gnss_cpy.flag_gnss = True
-            else:
-                self.cnt_gnss_signal_error += 1
-                if self.cnt_gnss_signal_error >= 3:
-                    self.flag_icp_execute = True
-                    if self.icp_test_cpy.icp_value_ready:
-                        self.serial_gnss_cpy.flag_gnss = True
-                        self.current_value.update(self.icp_test_cpy.current_value)
-                    else:
-                        print("icp calculating delay")
-                        
+            self.current_value.update(self.serial_gnss_cpy.current_value)
 
-        self.send_pitch_to_lidar(pitch = self.current_value['pitch'])
         # GPS 데이터를 업데이트
         # gps_data = {
         #     'latitude': self.current_value['latitude'],
@@ -377,6 +351,11 @@ class boat:
         #     'heading': self.current_value['heading']
         # }
         # self.gps_publisher.update_gps_data(gps_data)  # GPS 데이터를 GPSPublisher에 전달
+
+        self.send_pitch_to_lidar(pitch = self.current_value['pitch'])
+    
+    
+    
     
     def send_pitch_to_lidar(self, pitch):
         self.lidar_processor.pitch = pitch

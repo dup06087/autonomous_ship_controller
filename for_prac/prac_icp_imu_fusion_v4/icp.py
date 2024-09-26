@@ -7,8 +7,9 @@ import os
 import numpy as np
 import math
 import time
-from utils import log_message
+# from utils import log_message
 import json
+from std_msgs.msg import Float64MultiArray
 
 class ICPHandler:
     def __init__(self, gnss_handler, experiment_folder):
@@ -29,6 +30,7 @@ class ICPHandler:
         
         # GNSS 데이터를 사용한 초기화
         self.initialize_position()
+        self.icp_result_pub = rospy.Publisher('/icp_result', Float64MultiArray, queue_size=10)
 
         # 이전 값을 초기화된 GNSS 값으로 설정
         # self.prev_x = self.current_x
@@ -49,18 +51,18 @@ class ICPHandler:
             heading = self.gnss_handler.current_value['heading']
             """
 
-            latitude = 37.62888049166666
-            longitude = 127.07844826833333
-            heading = 335.797
-
+            latitude = 37.62887769
+            longitude = 127.07844109
+            heading =8.955
+            
             if latitude is not None and longitude is not None and heading is not None:
                 self.prev_latitude = latitude
                 self.prev_longitude = longitude
                 self.prev_heading = heading
-                log_message(f"Initial position set: lat={self.prev_latitude}, lon={self.prev_longitude}, heading={self.prev_heading}")
+                # log_message(f"Initial position set: lat={self.prev_latitude}, lon={self.prev_longitude}, heading={self.prev_heading}")
                 break
             else:
-                log_message("Waiting for valid GNSS data to initialize position...")
+                # log_message("Waiting for valid GNSS data to initialize position...")
                 time.sleep(1)  # 1초 대기 후 다시 시도
 
     def run(self):
@@ -153,7 +155,10 @@ class ICPHandler:
                     [np.sin(theta), np.cos(theta),  0, 0],
                     [0,             0,              1, 0],
                     [0,             0,              0, 1]])
-                
+                # self.icp_initial_guess = np.array([[0, 0, 0, self.prev_x_change],
+                #     [0, 0,  0, 0],
+                #     [0,             0,              1, 0],
+                #     [0,             0,              0, 1]])        
                 # reg_p2p = o3d.pipelines.registration.registration_icp(
                 #     cloud.to_legacy(), self.prev_scan.to_legacy(), 0.5,
                 #     self.icp_initial_guess,
@@ -170,9 +175,9 @@ class ICPHandler:
                     criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(
                         relative_fitness=1e-6,
                         relative_rmse=1e-6,
-                        max_iteration=10
+                        max_iteration=5
                     ),
-                    # callback_after_iteration=self.icp_callback
+                    callback_after_iteration=self.icp_callback
                 )
                 self.save_current_log_callback()
                 
@@ -206,7 +211,7 @@ class ICPHandler:
 
                     current_x += floored_lat
                     current_y += floored_lon
-                    print("current_x : ", current_x, "current_y : ", current_y)
+                    # print("current_x : ", current_x, "current_y : ", current_y)
                     
                     lat, lon = self.calculate_new_position(
                         self.prev_latitude,
@@ -217,6 +222,7 @@ class ICPHandler:
                     )
                     
                     self.log_file.write(f"{rospy.Time.now().to_sec()}, {lat}, {lon}, {current_heading}\n")
+                    self.publish_icp_result(lat, lon, current_heading)
 
                     # 현재 값을 이전 값으로 갱신
                     
@@ -228,13 +234,16 @@ class ICPHandler:
                     self.prev_y_change = current_y
                     # print("done")
                 else:
-                    log_message("ICP fitness low")
+                    print("ICP fitness low")
+                    # log_message("ICP fitness low")
                     
             self.prev_scan = cloud
+            
         except Exception as e:
-            log_message(f"ICP error: {e}")
+            pass
 
-        log_message(f"ICP time: {time.time() - prev_time}")
+            # log_message(f"ICP error: {e}")
+        # log_message(f"ICP time: {time.time() - prev_time}")
 
     def floor_to_eight_decimal_places(self, value):
         return math.trunc(value * 10**2) / 10**2
@@ -280,33 +289,6 @@ class ICPHandler:
 
         return new_lat, new_lon
 
-
-    # def calculate_new_position(self, lat, lon, delta_x, delta_y, heading):
-    #     # 변환된 heading: 90도에서 theta를 빼서 동쪽을 기준으로 변환
-    #     heading = heading + 90
-    #     if heading > 180:
-    #         heading -= 360
-    #     elif heading < 180:
-    #         heading += 360
-            
-    #     heading_rad = math.radians(heading)  # 90 - theta로 설정
-
-    #     # 회전 행렬을 사용한 변환
-    #     delta_north = delta_x * math.cos(heading_rad) - delta_y * math.sin(heading_rad)
-    #     delta_east = delta_x * math.sin(heading_rad) + delta_y * math.cos(heading_rad)
-
-    #     print("delta_north:", delta_north, "delta_east:", delta_east)
-
-    #     # 위도와 경도를 새로운 delta 값으로 업데이트
-    #     R = 6378137.0  # 지구 반지름 (미터 단위)
-    #     delta_lat = delta_north / R
-    #     new_lat = lat + math.degrees(delta_lat)
-    #     delta_lon = delta_east / (R * math.cos(math.radians(lat)))
-    #     new_lon = lon + math.degrees(delta_lon)
-
-    #     return new_lat, new_lon
-
-
     def point_cloud2_to_o3d(self, cloud_msg):
         points = []
         for p in pc2.read_points(cloud_msg, skip_nans=True):
@@ -334,9 +316,16 @@ class ICPHandler:
     def save_data(self):
         self.log_file.close()
 
+    def publish_icp_result(self, lat, lon, heading):
+        """ICP 결과 퍼블리시 (위도, 경도, 헤딩)."""
+        msg = Float64MultiArray()
+        msg.data = [lat, lon, heading]
+        self.icp_result_pub.publish(msg)
+        
 if __name__ == "__main__":
     rospy.init_node("icp_node")
     # gnss_handler = GNSSHandler()  # Assumes this class is defined elsewhere
-    experiment_folder = "/path/to/experiment_folder"  # Set the correct path
-    icp_handler = ICPHandler(gnss_handler, experiment_folder)
+    experiment_folder = "./ekf_results"  # Set the correct path
+    # icp_handler = ICPHandler(gnss_handler, experiment_folder)
+    icp_handler = ICPHandler(None, experiment_folder)
     icp_handler.run()

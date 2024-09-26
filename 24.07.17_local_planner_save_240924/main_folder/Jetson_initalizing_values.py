@@ -42,8 +42,6 @@ def initialize_variables(self):
     self.goal_subscribe_timeout = 3  # 10초 동안 업데이트가 없으면 경고
     self.flag_waypoint_publishing = False
     
-    self.cnt_gnss_signal_error = 0
-    
     self.flag_stop_update_waypoint = False
 
     self.current_gps_data = {
@@ -72,8 +70,6 @@ def initialize_variables(self):
     
     self.prev_heading = None
     self.cmd_vel_timeout = 2.0  # 1 second timeout
-
-    self.flag_icp_execute = False
 
     self.prev_value = {
             # dest_latitude, dest_longitude : list, connected with pc def start_driving

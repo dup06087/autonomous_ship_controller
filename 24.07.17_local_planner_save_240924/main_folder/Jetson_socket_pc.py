@@ -37,6 +37,8 @@ class Server_pc:
                     
                     self.flag_socket_pc[0] = True
                     receive_socket.sendall("ack".encode())  # Acknowledgment 메시지 보내기
+                    
+                    
 
                 except (json.JSONDecodeError, TypeError, ValueError) as e:
                     current_time = time.time()

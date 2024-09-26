@@ -20,15 +20,15 @@ class serial_gnss:
 
         # self.sender_to_lidar = Jetson_gps_send_to_gnss.UdpBroadcaster(10110)
 
-        # self.flag_gnss = False
+        self.flag_gnss = False
         self.cnt_receive = 0
         self.cnt_process = 0
         
         self.gnss_lock = lock
         self.id = id
         
-        # self.lpf_flag = True
-        # self.alpha = 0.2/(1+0.2)  # LPF 가중치 설정
+        self.lpf_flag = True
+        self.alpha = 0.2/(1+0.2)  # LPF 가중치 설정
         self.previous_values = {'latitude': None, 'longitude': None, 'heading': None, 'pitch': None}
 
         atexit.register(self.close_serial)
@@ -51,18 +51,18 @@ class serial_gnss:
                 file.write("closed gnss well\n")
             print("gnss port closed.")
             
-    # def apply_low_pass_filter(self, value_type, new_value):
-    #     if self.lpf_flag:  # lpf_flag가 True인 경우에만 LPF 적용
-    #         if new_value is None:
-    #             return None # 새 값이 None인 경우 필터링 하지 않고 반환
-    #         if self.previous_values[value_type] is None:
-    #             filtered_value = new_value
-    #         else:
-    #             filtered_value = self.alpha * new_value + (1 - self.alpha) * self.previous_values[value_type]
-    #         self.previous_values[value_type] = filtered_value
-    #         return filtered_value
-    #     else:
-    #         return new_value  # lpf_flag가 False인 경우 새 값을 그대로 반환
+    def apply_low_pass_filter(self, value_type, new_value):
+        if self.lpf_flag:  # lpf_flag가 True인 경우에만 LPF 적용
+            if new_value is None:
+                return None # 새 값이 None인 경우 필터링 하지 않고 반환
+            if self.previous_values[value_type] is None:
+                filtered_value = new_value
+            else:
+                filtered_value = self.alpha * new_value + (1 - self.alpha) * self.previous_values[value_type]
+            self.previous_values[value_type] = filtered_value
+            return filtered_value
+        else:
+            return new_value  # lpf_flag가 False인 경우 새 값을 그대로 반환
         
     def close(self):
         self.running = False
@@ -106,12 +106,12 @@ class serial_gnss:
                             # print("line : ", line)
                             lines.append(line)
                     except serial.SerialException as e:
-                        self.boat.flag_icp_execute = True
+                        self.boat.icp_test_cpy.flag_execute = True
 
                         print("gnss serial exception : ", e, " >> : gnss flag False")
                         for key in self.current_value.keys():
                             self.current_value[key] = None
-                        # self.flag_gnss = False
+                        self.flag_gnss = False
                         time.sleep(1)
                         
                     except Exception as e:
@@ -138,7 +138,7 @@ class serial_gnss:
 
             except Exception as e:
                 print("GNSS Error data receive part : ", e)
-                self.boat.flag_icp_execute = True
+                self.boat.icp_test_cpy.flag_execute = True
 
                 # lines = []
                 # self.close()
@@ -156,7 +156,15 @@ class serial_gnss:
                     count_alive = 0
                     # print("gnss serial count ", count_alive)
                 else:
-                    print("gnss _data_processing_part data varaible error : ")
+                    count_alive += 1
+                    if count_alive >= 3:
+                        self.boat.icp_test_cpy.flag_execute = True
+                        # pass
+                        # print("gnss no data error, cnt : ", count_alive)
+
+                        # self.flag_gnss = False
+                    else:
+                        self.flag_gnss = True
 
             except Exception as e:
                 print(f"Error processing data: {e}")
@@ -210,8 +218,13 @@ class serial_gnss:
             
     def _process_rot_data(self, tokens):
         try:
-            rotational_token = tokens[1]
-            self.current_value['rotational_velocity'] = round(float(rotational_token) / 60, 2) if rotational_token not in [None, ''] else None
+            rotateional_token = tokens[1]
+            if rotateional_token == '':
+                if not self.boat.icp_test_cpy.flag_execute: # icp 실행 안될때
+                    self.current_value['rotational_velocity'] = None
+            else:
+                if not self.boat.icp_test_cpy.flag_execute: # icp 실행 안될때
+                    self.current_value['rotational_velocity'] = round(float(rotateional_token) / 60, 2)
                     
         except ValueError as e:
             print(f"Error processing gnrot data: {e}")
@@ -220,7 +233,10 @@ class serial_gnss:
     def _process_vgt_data(self, tokens):
         try:
             cog_token = tokens[3]
-            self.current_value['COG'] = float(cog_token) if cog_token not in [None, ''] else None
+            if cog_token == '':
+                self.current_value['COG'] = None
+            else:
+                self.current_value['COG'] = float(cog_token)
                 
         except ValueError as e:
             print(f"Error processing gnvgt data: {e}")
@@ -228,23 +244,18 @@ class serial_gnss:
     def _process_gnrmc_data(self, tokens):
         try:
             validity = tokens[2]
-            self.current_value['validity'] = validity
-            if validity == "V": # V : invalid, A : valid                
-                self.current_value['latitude'] = None
-                self.current_value['longitude'] = None
-                self.current_value['heading'] = None
-                self.current_value['pitch'] = None
-                self.current_value['velocity'] = None
-                self.current_value['rotational_velocity'] = None
-                self.current_value['COG'] = None
+            if validity == "V": # V : invalid, A : valid
+                self.cnt_receive += 1
+                self.current_value['validity'] = validity
+                if self.cnt_receive >= 5:
+                    print("gnss false here 2")
+                    self.flag_gnss = False
+                # print("validity : ", validity)
+                # print("current validity : ", self.current_value["validity"])
+                # print("inner current value : ", self.current_value)
                 return
 
-            if tokens[3] in [None, '']:
-                self.current_value['latitude'] = None
-                self.current_value['longitude'] = None
-                self.current_value['velocity'] = None
-                return
-            
+            self.current_value['validity'] = validity
             lat_min = float(tokens[3])
             lat_deg = int(lat_min / 100)
             lat_min -= lat_deg * 100
@@ -259,11 +270,18 @@ class serial_gnss:
             # LPF 적용
             # filtered_lat = self.apply_low_pass_filter('latitude', new_lat)
             # filtered_lon = self.apply_low_pass_filter('longitude', new_lon)
-            
-            self.current_value['latitude'] = new_lat
-            self.current_value['latitude'] = new_lon
-            self.current_value['velocity'] = round(float(tokens[7]) * 0.51444, 2) if tokens[7] not in [None, ''] else None
-        
+            if not self.boat.icp_test_cpy.flag_execute: # icp 실행 안될때
+                self.current_value['latitude'] = round(new_lat, 8)
+                self.current_value['longitude'] = round(new_lon, 8)
+            else: # 처음부터 값이 안들어왔을 때에는, gnss 값 초기화
+                if self.current_value['latitude'] == None:
+                    self.current_value['latitude'] = round(new_lat, 8)
+                    self.current_value['longitude'] = round(new_lon, 8)
+                    #below test
+                    self.current_value['heading'] = 0
+                    self.current_value['pitch'] = 0
+                    
+            self.current_value['velocity'] = round(float(tokens[7]) * 0.51444, 2)
             self.cnt_receive = 0
 
         except ValueError as e:
@@ -274,11 +292,30 @@ class serial_gnss:
         try:
             self.current_value['time'] = tokens[2]
             self.current_value['date'] = tokens[3]
-            self.current_value['heading'] = round(float(tokens[4]), 2) if tokens[4] not in [None, ''] else None
-            self.current_value['pitch'] = round(float(tokens[6]), 2) if tokens[6] not in [None, ''] else None
+            new_heading = float(tokens[4])
+            new_pitch = float(tokens[6])
+
+            # LPF 적용
+            # filtered_heading = self.apply_low_pass_filter('heading', new_heading)
+            # filtered_pitch = self.apply_low_pass_filter('pitch', new_pitch)
+
+            self.current_value['heading'] = round(new_heading, 2)
+            self.current_value['pitch'] = round(new_pitch, 2)
+
+            self.flag_gnss = True
+            self.cnt_process = 0
+            self.boat.icp_test_cpy.flag_execute = False
 
         except ValueError as e:
-            print("gnss : _process_pssn_data value error : ", e)
+            # when heading pitch is not comming heading pitch raw data comes '' not None
+            # print(f"heading pitch not came: {e}")
+            self.cnt_process += 1
+            if self.cnt_process >= 3:
+                self.boat.icp_test_cpy.flag_execute = True
+                # print("gnss false : heading, pitch")
+                # self.current_value['heading'] = None
+                # self.current_value['pitch'] = None
+                # self.flag_gnss = False # at ICP 
             
         except Exception as e:
             print("processing pssn error : ", e)
@@ -327,3 +364,4 @@ if __name__ == "__main__":
             time.sleep(1)
         except:
             pass
+        
