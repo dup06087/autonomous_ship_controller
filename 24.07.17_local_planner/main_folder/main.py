@@ -5,7 +5,7 @@ from Jetson_serial_nucleo import serial_nucleo
 from Jetson_socket_pc import Server_pc
 from Jetson_lidar_execution_gpu import PointCloudProcessor
 from ICP_IMU import ICPHandler, IMUCorrector
-from pub_twist_by_gnss import VelocityPublisher
+from odometry_publisher import VelocityPublisher
 
 # from auto_drive import auto_drive
 from auto_drive_dynamics import auto_drive
@@ -129,10 +129,10 @@ class boat:
         self.serial_gnss_cpy = None
         self.serial_gnss_cpy_thread = None
         try:
-            # self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
+            self.serial_gnss_cpy = serial_gnss("/dev/ttyACM1", self.gnss_lock, 1, self)
             # sudo chmod a+rw /dev/ttyACM0
             # self.serial_gnss_cpy = serial_gnss("/dev/tty_septentrio0", self.gnss_lock, 1, self)
-            self.serial_gnss_cpy = serial_gnss("/dev/pts/5", self.gnss_lock, 1, self)
+            # self.serial_gnss_cpy = serial_gnss("/dev/pts/5", self.gnss_lock, 1, self)
             self.serial_gnss_cpy_thread = threading.Thread(target=self.serial_gnss_cpy.run)
             self.serial_gnss_cpy_thread.start()
             print("gnss started well")
@@ -357,16 +357,21 @@ class boat:
                 self.current_value.update(self.serial_gnss_cpy.current_value)
                 self.flag_icp_execute = False
                 self.cnt_gnss_signal_error = 0
-                self.serial_gnss_cpy.flag_gnss = True
+                self.serial_gnss_cpy.flag_localization = True
             else:
                 self.cnt_gnss_signal_error += 1
                 if self.cnt_gnss_signal_error >= 3:
                     self.flag_icp_execute = True
                     if self.icp_test_cpy.icp_value_ready:
-                        self.serial_gnss_cpy.flag_gnss = True
+                        self.serial_gnss_cpy.flag_localization = True
                         self.current_value.update(self.icp_test_cpy.current_value)
                     else:
                         print("icp calculating delay")
+                        if self.cnt_gnss_signal_error >= 5:
+                            self.serial_gnss_cpy.flag_localization = False
+                            self.current_value = {'latitude' : None, 'longitude' : None, 'velocity' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None}
+                            print("icp also not ready error")
+                        
                         
 
         self.send_pitch_to_lidar(pitch = self.current_value['pitch'])
@@ -387,7 +392,6 @@ class boat:
         flag_devices = self.flag_check(self.autodrive_output_flag) #True or False
         
         flag_data = self.data_check_all_device()
-        
         
         self.flag_autodrive = flag_devices and flag_data[0] ### final ready flag
         if self.flag_autodrive == False and self.current_value["mode_pc_command"] == "AUTO":
@@ -418,7 +422,7 @@ class boat:
         return True
 
     def flag_devices(self):
-        flags = self.jetson_socket_pc.flag_socket_pc, self.serial_nucleo_cpy.flag_nucleo_alive, self.serial_gnss_cpy.flag_gnss
+        flags = self.jetson_socket_pc.flag_socket_pc, self.serial_nucleo_cpy.flag_nucleo_alive, self.serial_gnss_cpy.flag_localization
         # print("flags : ", flags)    
         return flags
     
@@ -428,10 +432,11 @@ class boat:
         dest_lat = self.current_value['dest_latitude']
         dest_lon = self.current_value['dest_longitude']
         heading = self.current_value['heading']
-        
-        flag_ready_gnss_data = (lat is not None and lon is not None and dest_lat is not None and dest_lon is not None and heading is not None)
+
         flag_ready_nucleo_data = (not self.current_value["mode_chk"] <= 20) # mode_chk == 0 >> need to bind # error : '<=' not supported between instances of 'str' and 'int'
-        flag_auto_drive_command =(self.current_value["mode_pc_command"] == "AUTO")
+        flag_ready_gnss_data = (lat is not None and lon is not None and dest_lat is not None and dest_lon is not None and heading is not None)
+        flag_auto_drive_command = (self.current_value["mode_pc_command"] == "AUTO")
+                
         # print(lat, lon, dest_lat, dest_lon, heading)
         # print("flag_ready_gnss_data : ", flag_ready_gnss_data, ", flag_ready_nucleo_data : ", flag_ready_nucleo_data, ", flag_auto_drive_command : ", flag_auto_drive_command)
         return [flag_ready_nucleo_data and flag_ready_gnss_data and flag_auto_drive_command, lat, lon, dest_lat, dest_lon, heading]
@@ -469,6 +474,7 @@ class boat:
             self.velocity_publisher_thread.start()
         except Exception as e:
             print("velocity publisher main thread error : ", e)
+            
     def thread_start(self):
         prev_pc_command = None
         self.lidar_thread()

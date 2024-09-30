@@ -72,11 +72,12 @@ def auto_drive(self):
                 flag_ready_to_auto_drive = True
                 current_latitude, current_longitude, destination_latitude, destination_longitude
                 """
-                current_latitude, current_longitude, destination_latitude, destination_longitude = self.current_value["latitude"], self.current_value["longitude"], self.current_value["dest_latitude"], self.current_value["dest_longitude"]
-                # print("hello3")
+                # current_latitude, current_longitude, destination_latitude, destination_longitude = self.current_value["latitude"], self.current_value["longitude"], self.current_value["dest_latitude"], self.current_value["dest_longitude"]
+                # # print("hello3")
 
-                current_heading = self.current_value["heading"]
+                # current_heading = self.current_value["heading"]
                 # print("hello4")
+                
                 if destination_latitude != prev_destination_latitude or destination_longitude != prev_destination_longitude: # arrived, new_destination_arrived
                     self.cnt_destination = 0
                     self.current_value["cnt_destination"] = self.cnt_destination
@@ -113,30 +114,14 @@ def auto_drive(self):
                 try:
                     # print("hello0")
                     self.current_value["arrived"] = False
-                    counter_dead_autodrive = 0
-                    base_lat = current_latitude
-                    base_lon = current_longitude
-                    # print("hello1")
-                    # if self.current_value["waypoint_lat_m"] == None or self.current_value["waypoint_lon_m"] == None:    
-                    #     self.current_value["pwml_auto"] = 1500
-                    #     self.current_value["pwmr_auto"] = 1500
-                    #     continue
-                    # else:
-                    #     distance_x = self.current_value["waypoint_lat_m"]
-                    #     distance_y = self.current_value["waypoint_lon_m"]
-
-                    # current_heading = self.current_value["heading"]
-                    # try: 
-                    #     target_lat, target_lon = convert_metric_to_latlon(base_lat, base_lon, distance_x, distance_y, current_heading) # target : 위경도
-                    #     adjusted_target_lat, adjusted_target_lon = adjust_gps_position(target_lat, target_lon, current_heading)
-                    # except Exception as e:
-                    #     print("error 3 : ", e)
-                    
+                    # counter_dead_autodrive = 0
+                    # base_lat = current_latitude
+                    # base_lon = current_longitude
+                   
                     try:
-                        # self.current_value["waypoint_latitude"] = adjusted_target_lat
-                        # self.current_value["waypoint_longitude"] = adjusted_target_lon
-                        # calculate_pwm_auto(self, current_latitude, current_longitude, float(adjusted_target_lat), float(adjusted_target_lon), current_heading, self.current_value['coeff_kf'], self.current_value['coeff_kd'])
-                        calculate_pwm_auto(self, current_latitude, current_longitude, 0, 0, current_heading, self.current_value['coeff_kv_p'], self.current_value['coeff_kv_i'])
+                        calculate_pwm_auto(self, self.current_value["forward_velocity"], self.current_value["rotational_velocity"],  self.linear_x, self.angular_z,
+                                           self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["coeff_kv_d"],
+                                           self.current_value["coeff_kw_p"], self.current_value["coeff_kw_i"], self.current_value["coeff_kw_d"])
                     except Exception as e:
                         print("error 4 : ", e)
                     t = time.localtime()    
@@ -257,25 +242,26 @@ def compute_angular_velocity(self):
 #     self.prev_time = time.time()
 #     return angular_velocity
     
-def calculate_pwm_auto(self, current_latitude, current_longitude, destination_latitude, destination_longitude, current_heading, Kf=2.5, Kd=0.318, Ki=0.1, dt=0.2):
+def calculate_pwm_auto(self, forward_velocity, rotational_velocity, desired_forward_velocity, desired_angular_velocity,
+                       kv_p, kv_i, kv_d, kw_p, kw_i, kw_d, dt=0.2):
     try:
         
-        v_measured = self.current_value["forward_velocity"]
-        omega_measured = -self.current_value["rotational_velocity"] * math.pi / 180 # deg
+        v_measured = forward_velocity
+        omega_measured = -rotational_velocity * math.pi / 180 # deg
         # omega_measured = -compute_angular_velocity(self) # deg
         print("current v,w : ", v_measured, omega_measured) 
-        print("desired v,w(rad) : ", self.linear_x, self.angular_z) # rad
+        print("desired v,w(rad) : ", desired_forward_velocity, desired_angular_velocity) # rad
         
-        if self.linear_x == 0 and self.angular_z == 0:
+        if desired_forward_velocity == 0 and desired_angular_velocity == 0:
             self.current_value["pwml_auto"] = 1500
             self.current_value["pwmr_auto"] = 1500
             return
         
         v_control, self.prev_error_v, self.integral_v = compute_pid(
-            self.linear_x, v_measured, dt, self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["coeff_kv_d"],
+            desired_forward_velocity, v_measured, dt, kv_p, kv_i, kv_d,
             self.prev_error_v, self.integral_v)
         omega_control, self.prev_error_omega, self.integral_omega = compute_pid(
-            self.angular_z, omega_measured, dt, self.current_value["coeff_kw_p"], self.current_value["coeff_kw_i"], self.current_value["coeff_kw_d"],
+            desired_angular_velocity, omega_measured, dt, kw_p, kw_i, kw_d,
             self.prev_error_omega, self.integral_omega)
 
         b = 0.295  # 바퀴 사이 거리

@@ -97,7 +97,7 @@ class ICPHandler:
         self.prev_heading_changed = 0
         self.icp_value_ready = False
         
-        self.current_value = {"latitude" : None, "longitude" : None, "heading" : None}
+        self.current_value = {"latitude" : None, "longitude" : None, "heading" : None, "COG" : None, "velocity" : None, "forward_velociy" : None, "rotational_velocity" : None}
         
         rospy.Timer(rospy.Duration(0.2), self.update_main_instance)
 
@@ -186,14 +186,17 @@ class ICPHandler:
                     # Log the result to file
                     # self.log_icp_result_to_file(lat, lon, current_heading, data.header.stamp)
                     
+                    rotational_velocity = (icp_heading_change)/(data.header.stamp - self.processed_time).to_sec() # rad/s
+                    velocity = math.root(v_x**2+v_y**2)
+                    
                     self.icp_value_ready= True
-                    self.current_value = {"latitude" : lat, "longitude" : lon, "heading" : current_heading}
+                    self.current_value = {"latitude" : lat, "longitude" : lon, "heading" : current_heading, "forward_velocity" : v_x, "velocity" : velocity, "rotational_velcity" : rotational_velocity}
                     self.processed_time = current_time
 
                     
             else:
                 self.icp_value_ready= False
-                self.current_value = {"latitude" : None, "longitude" : None, "heading" : None}
+                self.current_value = {"latitude" : None, "longitude" : None, "heading" : None, "COG" : None, "velocity" : None, "forward_velociy" : None, "rotational_velocity" : None}
 
                 print("prev_scan none : ", rospy.Time.now())
             # Store the current scan for the next iteration
@@ -201,7 +204,21 @@ class ICPHandler:
 
         except Exception as e:
             print(f"ICP error: {e}")
-        
+
+    def rotation_matrix_to_euler(self, rotation_matrix):
+        R = np.array(rotation_matrix)
+        sy = np.sqrt(R[0, 0] ** 2 + R[1, 0] ** 2)
+        singular = sy < 1e-6
+        if not singular:
+            x = np.arctan2(R[2, 1], R[2, 2])
+            y = np.arctan2(-R[2, 0], sy)
+            z = np.arctan2(R[1, 0], R[0, 0])
+        else:
+            x = np.arctan2(-R[1, 2], R[1, 1])
+            y = np.arctan2(-R[2, 0], sy)
+            z = 0
+        return np.array([x, y, z])
+    
     def calculate_new_position(self, lat, lon, delta_x, delta_y, heading, delta_time):
         """Convert local ICP dx, dy to latitude and longitude updates, and calculate velocities."""
         if heading > 180:

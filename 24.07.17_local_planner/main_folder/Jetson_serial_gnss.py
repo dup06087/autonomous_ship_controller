@@ -5,6 +5,8 @@ import time
 from datetime import datetime
 import atexit
 import os
+import math
+
 
 class serial_gnss:
     def __init__(self, port, lock, id, boat_instance, baudrate=115200):
@@ -16,11 +18,11 @@ class serial_gnss:
         self.receive_queue = Queue()
         self.running = True
 
-        self.current_value = {'validity' : None, 'latitude' : None, 'longitude' : None, 'velocity' : None, 'date' :  None, 'time' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None}
+        self.current_value = {'validity' : None, 'latitude' : None, 'longitude' : None, 'velocity' : None, 'date' :  None, 'time' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None, 'forward_velocity' : None}
 
         # self.sender_to_lidar = Jetson_gps_send_to_gnss.UdpBroadcaster(10110)
 
-        # self.flag_gnss = False
+        self.flag_localization = True
         self.cnt_receive = 0
         self.cnt_process = 0
         
@@ -70,7 +72,7 @@ class serial_gnss:
 
     def add_to_queue(self, data):
         with self.gnss_lock:
-            # print("gnss data : ", data)
+            print("gnss data : ", data)
             self.receive_queue.put(data)
 
     def get_from_queue(self):
@@ -122,7 +124,7 @@ class serial_gnss:
                     if len(lines) >= 5:
                         line_ = [lines[-4],lines[-3],lines[-2], lines[-1]]
                         # print("here12")
-                    elif len(lines) < 4 and len(lines) >= 1:
+                    elif len(lines) <= 4 and len(lines) >= 1:
                         line_ = lines
                         # print("here14")
                     else:
@@ -156,7 +158,7 @@ class serial_gnss:
                     count_alive = 0
                     # print("gnss serial count ", count_alive)
                 else:
-                    print("gnss _data_processing_part data varaible error : ")
+                    print("gnss _data_processing_part data varaible error : ", data)
 
             except Exception as e:
                 print(f"Error processing data: {e}")
@@ -221,7 +223,24 @@ class serial_gnss:
         try:
             cog_token = tokens[3]
             self.current_value['COG'] = float(cog_token) if cog_token not in [None, ''] else None
+            
+            cog = self.boat.current_value['COG']
+            heading = self.boat.current_value['heading']
+            velocity = self.boat.current_value['velocity']
+            if cog is not None and heading is not None and velocity is not None:
+                # 각도 차이 계산 (단위: degrees)
+                delta_theta = abs(cog - heading)
+
+                # 각도 차이를 radians로 변환
+                delta_theta_rad = math.radians(delta_theta)
+
+                # Forward Velocity 계산
+                forward_velocity = round(velocity * math.cos(delta_theta_rad), 2)
+            else:
+                forward_velocity = 0
                 
+            self.current_value['forward_velocity'] = forward_velocity
+    
         except ValueError as e:
             print(f"Error processing gnvgt data: {e}")
             
