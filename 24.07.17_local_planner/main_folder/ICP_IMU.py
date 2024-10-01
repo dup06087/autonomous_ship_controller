@@ -115,7 +115,8 @@ class ICPHandler:
                 self.prev_heading = heading
                 # print(f"Main instance updated: lat={latitude}, lon={longitude}, heading={heading}")
             else:
-                print("Main instance values are None, skipping update.")
+                pass
+                # print("Main instance values are None, skipping update.")
         else:
             print("Main instance current_value is None, skipping update.")
 
@@ -163,14 +164,15 @@ class ICPHandler:
 
                     # Update heading based on ICP result
                     icp_heading_change = np.degrees(rotation_euler[2])
-                    current_heading = (self.prev_heading - icp_heading_change) % 360
+                    current_heading = round((self.prev_heading - icp_heading_change) % 360, 3)
 
                     # Calculate new global position based on ICP translation result
                     lat, lon, v_x, v_y = self.calculate_new_position(
                         self.prev_latitude, self.prev_longitude,
                         -translation[2], translation[0], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
                     )
-
+                    lat = round(lat, 8)
+                    lon = round(lon, 8)
                     # Update global position with ICP result
                     self.prev_latitude = lat
                     self.prev_longitude = lon
@@ -186,13 +188,13 @@ class ICPHandler:
                     # Log the result to file
                     # self.log_icp_result_to_file(lat, lon, current_heading, data.header.stamp)
                     
-                    rotational_velocity = (icp_heading_change)/(data.header.stamp - self.processed_time).to_sec() # rad/s
-                    velocity = math.root(v_x**2+v_y**2)
+                    rotational_velocity = round((icp_heading_change)/(data.header.stamp - self.processed_time).to_sec() , 3)# rad/s
+                    velocity = round(math.sqrt(v_x**2+v_y**2), 3)
                     
                     self.icp_value_ready= True
                     self.current_value = {"latitude" : lat, "longitude" : lon, "heading" : current_heading, "forward_velocity" : v_x, "velocity" : velocity, "rotational_velcity" : rotational_velocity}
                     self.processed_time = current_time
-
+                    print("ICP done")
                     
             else:
                 self.icp_value_ready= False

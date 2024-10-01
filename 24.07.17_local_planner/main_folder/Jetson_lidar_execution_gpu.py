@@ -11,8 +11,8 @@ from threading import Lock
 
 class PointCloudProcessor:
     def __init__(self):
-        self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback, queue_size=2)
-        self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=2)
+        self.sub = rospy.Subscriber("/velodyne_points", PointCloud2, self.callback, queue_size=1)
+        self.pub = rospy.Publisher("/processed_pointcloud", PointCloud2, queue_size=1)
         self.bbox_lists = []
         self.pitch = None
         self.vff_force = 0.2
@@ -20,18 +20,21 @@ class PointCloudProcessor:
         self.lock = Lock()
 
     def update_coeff(self, coeff_kv_p, coeff_kv_i, coeff_kv_d, coeff_kw_p, coeff_kw_i, coeff_kw_d, voxel_size, intensity, dbscan_eps, dbscan_minpoints, vff_force):
-        self.coeff_kv_p = coeff_kv_p
-        self.coeff_kv_i = coeff_kv_i
-        self.coeff_kv_d = coeff_kv_d
-        self.coeff_kw_p = coeff_kw_p
-        self.coeff_kw_i = coeff_kw_i
-        self.coeff_kw_d = coeff_kw_d
-        self.voxel_size = voxel_size
-        self.intensity = intensity
-        self.dbscan_eps= dbscan_eps
-        self.dbscan_minpoints = dbscan_minpoints
-        self.vff_force = vff_force
-        
+        try:
+            self.coeff_kv_p = coeff_kv_p
+            self.coeff_kv_i = coeff_kv_i
+            self.coeff_kv_d = coeff_kv_d
+            self.coeff_kw_p = coeff_kw_p
+            self.coeff_kw_i = coeff_kw_i
+            self.coeff_kw_d = coeff_kw_d
+            self.voxel_size = voxel_size
+            self.intensity = intensity
+            self.dbscan_eps= dbscan_eps
+            self.dbscan_minpoints = dbscan_minpoints
+            self.vff_force = vff_force
+        except Exception as e:
+            print("(pointcloudprocessor) Update coeff error : ", e)
+            
     def crop_roi(self, pcd, start, end):
         min_bound = o3c.Tensor(start, dtype=o3c.float32, device=pcd.device)
         max_bound = o3c.Tensor(end, dtype=o3c.float32, device=pcd.device)
@@ -73,8 +76,8 @@ class PointCloudProcessor:
         # return
         time_prev = time.time()
         time_diff = rospy.Time.now() - msg.header.stamp
-        if time_diff.to_sec() > 0.1:
-            # print("returned lidar callback : ", time_diff.to_sec())
+        if time_diff.to_sec() > 0.12:
+            print("returned lidar callback : ", time_diff.to_sec())
             return
         # return
         pc_array = ros_np.pointcloud2_to_array(msg)
@@ -102,7 +105,7 @@ class PointCloudProcessor:
         points_xyz = pc2.create_cloud_xyz32(header, points_cpu)
         self.pub.publish(points_xyz)
         # rospy.loginfo("Published processed point cloud. Processing Time: {:.2f} seconds".format(time.time() - time_prev))
-        
+        print("pulbished processed pointcloud")
     def run(self):
         rospy.spin()
 

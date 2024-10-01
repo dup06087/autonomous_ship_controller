@@ -36,7 +36,7 @@ def auto_drive(self):
     rospy.Subscriber("/cmd_vel", Twist, self.update_cmd_vel)
     rospy.Timer(rospy.Duration(self.cmd_vel_timeout), self.check_cmd_vel_timeout)
 
-    print("globalplanner subscribing")
+    print("planner subscribing")
     rospy.Timer(rospy.Duration(1), self.check_global_waypoint_timeout)
 
     last_print_time = time.time()  # 占쏙옙占쏙옙占쏙옙占쏙옙占쏙옙 占쏙옙占쏙옙占?占시곤옙 占십깍옙화

@@ -72,7 +72,7 @@ class serial_gnss:
 
     def add_to_queue(self, data):
         with self.gnss_lock:
-            print("gnss data : ", data)
+            # print("gnss data : ", data)
             self.receive_queue.put(data)
 
     def get_from_queue(self):
@@ -150,15 +150,17 @@ class serial_gnss:
         while self.running:
             try:
                 # print("gnss error cnt : ", self.cnt_receive, self.cnt_process, self.flag_gnss)
-                time.sleep(0.15)     #'''time control'''
+                time.sleep(0.1)     #'''time control'''
+
                 data = self.get_from_queue()
                 # print("1. gnss data : ", data)
                 if data:
                     self.process_to_single_data(data)
-                    count_alive = 0
+                    count_alive = 0 
                     # print("gnss serial count ", count_alive)
                 else:
-                    print("gnss _data_processing_part data varaible error : ", data)
+                    pass # 2번에 1번만 되는거 > sampling freq 2배로 둠
+                    # print("gnss _data_processing_part data varaible error : ", data)
 
             except Exception as e:
                 print(f"Error processing data: {e}")

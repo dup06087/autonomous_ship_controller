@@ -42,8 +42,8 @@ class boat:
             "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving 
             "waypoint_lat_m" : None, "waypoint_lon_m" : None,
             # gnss get params below
-            'velocity': None, 'heading': 0, 'forward_velocity': None, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None, 
-            "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0, 'COG' : None, 'rotational_velocity' : None,
+            'velocity': None, 'heading': 0, 'forward_velocity': 0, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None, 
+            "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0, 'COG' : None, 'rotational_velocity' : 0,
             "arrived" : False, "flag_autodrive" : False
             # gnss end
             } # cf. com_status undefined
@@ -150,12 +150,12 @@ class boat:
 
     def ICP_thread(self):
         try:
-            imu_corrector = IMUCorrector(self)
-            icp_handler = ICPHandler(self, imu_corrector)
+            self.imu_corrector = IMUCorrector(self)
+            self.icp_handler = ICPHandler(self, self.imu_corrector)
 
             # 각각의 클래스를 스레드로 실행
-            imu_thread = threading.Thread(target=imu_corrector.run)
-            icp_thread = threading.Thread(target=icp_handler.run)
+            imu_thread = threading.Thread(target=self.imu_corrector.run)
+            icp_thread = threading.Thread(target=self.icp_handler.run)
 
             imu_thread.start()
             icp_thread.start()
@@ -271,7 +271,7 @@ class boat:
         try:    
             # print("collecting")
             '''add obstacle related coordiante etc...'''
-            tasks = [lambda : self.update_seperate_data(), 
+            tasks = [self.update_seperate_data, 
                     self.update_pc_command,
                     self.update_pc_coeff,
                     self.update_jetson_coeff,
@@ -281,15 +281,16 @@ class boat:
             prev_time_collect_data = time.time()
             while True:
                 self.prev_value = copy.deepcopy(self.current_value)
+                
 
-                for task in tasks:
+                for idx, task in enumerate(tasks):
                     try:
                         task()
                         
                     except Exception as e:
                         if time.time() - prev_time_collect_data >=1:
                             prev_time_collect_data = time.time()
-                            # print("collect data error : {}".format(e))
+                            print("{}th collect data error : {}".format(idx, e))
                         # pass
       
                 # print("collected current value : ", self.current_value)
@@ -335,21 +336,29 @@ class boat:
             print("flag_autodrive update error : ", e)        
 
     def update_pc_command(self):
-        current_pc_command = self.jetson_socket_pc.pc_command
-        if current_pc_command != self.prev_pc_command:
-            self.current_value.update(current_pc_command)
-            self.prev_pc_command = copy.deepcopy(current_pc_command)
-
+        try:
+            current_pc_command = self.jetson_socket_pc.pc_command
+            if current_pc_command != self.prev_pc_command:
+                self.current_value.update(current_pc_command)
+                self.prev_pc_command = copy.deepcopy(current_pc_command)
+        except Exception as e:
+            print("update pc command : ", e)
     def update_pc_coeff(self):
-        current_pc_coeff = self.jetson_socket_pc.pc_coeff
-        if current_pc_coeff != self.prev_pc_coeff:
-            self.current_value.update(current_pc_coeff)
-            self.prev_pc_coeff = copy.deepcopy(current_pc_coeff)
-    
+        try:
+            current_pc_coeff = self.jetson_socket_pc.pc_coeff
+            if current_pc_coeff != self.prev_pc_coeff:
+                self.current_value.update(current_pc_coeff)
+                self.prev_pc_coeff = copy.deepcopy(current_pc_coeff)
+        except Exception as e:
+            print("update_pc_coeff error? : ", e)
+            
     def update_jetson_coeff(self):
-        self.lidar_processor.update_coeff(self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["coeff_kv_d"], self.current_value["coeff_kw_p"],
-                                          self.current_value["coeff_kw_i"], self.current_value["coeff_kw_d"],
-                                          self.current_value["voxel_size"], self.current_value["intensity"],self.current_value["dbscan_eps"],self.current_value["dbscan_minpoints"],self.current_value["coeff_vff_repulsive_force"])
+        try:
+            self.lidar_processor.update_coeff(self.current_value["coeff_kv_p"], self.current_value["coeff_kv_i"], self.current_value["coeff_kv_d"], self.current_value["coeff_kw_p"],
+                                            self.current_value["coeff_kw_i"], self.current_value["coeff_kw_d"],
+                                            self.current_value["voxel_size"], self.current_value["intensity"],self.current_value["dbscan_eps"],self.current_value["dbscan_minpoints"],self.current_value["coeff_vff_repulsive_force"])
+        except Exception as e:
+            print("(update_jetson_coeff) error : e")
             
     def update_gnss_data(self):
         with self.gnss_lock:
@@ -361,16 +370,20 @@ class boat:
             else:
                 self.cnt_gnss_signal_error += 1
                 if self.cnt_gnss_signal_error >= 3:
+                    # print("icp executing")
+
                     self.flag_icp_execute = True
-                    if self.icp_test_cpy.icp_value_ready:
+                    if self.icp_handler.icp_value_ready:
+                        # print("icp executing2")
                         self.serial_gnss_cpy.flag_localization = True
-                        self.current_value.update(self.icp_test_cpy.current_value)
+                        self.current_value.update(self.icp_handler.current_value)
                     else:
-                        print("icp calculating delay")
+                        # print("icp calculating delay")
                         if self.cnt_gnss_signal_error >= 5:
                             self.serial_gnss_cpy.flag_localization = False
-                            self.current_value = {'latitude' : None, 'longitude' : None, 'velocity' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None}
-                            print("icp also not ready error")
+                            self.gnss_initial_value = {'latitude' : None, 'longitude' : None, 'velocity' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None, 'forward_velocity' : None}
+                            self.current_value.update(self.gnss_initial_value)
+                            # print("icp also not ready error")
                         
                         
 

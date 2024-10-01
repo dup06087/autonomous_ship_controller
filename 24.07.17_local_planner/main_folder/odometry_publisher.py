@@ -7,7 +7,7 @@ class VelocityPublisher:
     def __init__(self, mother_instance):
         print("VelocityPublisher Publishing")
         self.mother_instance = mother_instance
-        self.pub = rospy.Publisher('/odom', Odometry, queue_size=2)
+        self.pub = rospy.Publisher('/odom', Odometry, queue_size=5)
         # rospy.init_node('velocity_publisher', anonymous=True)
         self.rate = rospy.Rate(5)  # 10 Hz
         self.previous_time = rospy.Time.now()
@@ -32,19 +32,19 @@ class VelocityPublisher:
                 
                 forward_velocity = self.mother_instance.current_value['forward_velocity']
                 angular_velocity = self.mother_instance.current_value['rotational_velocity']
-                
+
                 if forward_velocity is None or angular_velocity is None:
                     odom.twist.twist.linear.x = 0
                     odom.twist.twist.angular.z = 0
                 else:        
                     odom.twist.twist.linear.x = forward_velocity
                     odom.twist.twist.angular.z = -angular_velocity
-                
+
                 self.pub.publish(odom)
                 self.rate.sleep()
-                
+
             except Exception as e:
-                print("(odometry publisher)Pub twist error : ", e)
+                print("(odometry publisher)Pub twist error : ", e, forward_velocity, angular_velocity)
     
 
     
