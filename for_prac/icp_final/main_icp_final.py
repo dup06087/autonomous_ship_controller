@@ -485,7 +485,7 @@ class ICPHandler:
         # PointCloud의 모든 점들을 dx, dy 만큼 이동시킴
         
 
-        cloud = cloud.translate((0, distance, 0))
+        cloud = cloud.translate((distance,0 , 0))
 
         return cloud
 

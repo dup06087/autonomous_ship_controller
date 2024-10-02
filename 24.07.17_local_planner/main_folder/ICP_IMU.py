@@ -10,12 +10,12 @@ import math
 import time
 import json
 import datetime
+import std_msgs
 
 class IMUCorrector:
     def __init__(self, main_instance):
         print("IMUCorrector Initialized")
         self.boat = main_instance
-        self.correction_pub = rospy.Publisher('/imu/corrected', Float64MultiArray, queue_size=2)
         rospy.Subscriber('/imu/data', Imu, self.imu_callback)
 
         # IMU deltas (relative to last ICP result)
@@ -83,7 +83,9 @@ class ICPHandler:
         # ICP initial guess
         self.icp_initial_guess = np.eye(4)
         # self.icp_result_pub = rospy.Publisher('/icp_result', Float64MultiArray, queue_size=1)
-        self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=1)
+        # self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=1)
+        self.sub_lidar = rospy.Subscriber('/processed_pointcloud', PointCloud2, self.lidar_callback, queue_size=1)
+        # self.pub_check_trans = rospy.Publisher("/transformed_pointcloud", PointCloud2, queue_size=1)
 
         # self.log_file = open(self.icp_data_file, "a")
         self.processed_time = None
@@ -100,7 +102,33 @@ class ICPHandler:
         self.current_value = {"latitude" : None, "longitude" : None, "heading" : None, "COG" : None, "velocity" : None, "forward_velociy" : None, "rotational_velocity" : None}
         
         rospy.Timer(rospy.Duration(0.2), self.update_main_instance)
+        self.correction_pub = rospy.Publisher('/imu/corrected', Float64MultiArray, queue_size=2)
 
+        self.device = o3c.Device("CUDA:0")  # CUDA 장치 0을 사용
+        self.warm_up_open3d_cuda()
+        
+
+    def warm_up_open3d_cuda(self):
+        print("Warming up CUDA using Open3D-Core...")
+
+        # 간단한 텐서를 생성하고 CUDA 디바이스에 올림
+        tensor_a = o3c.Tensor(np.random.rand(100).astype(np.float32), device=self.device)
+        tensor_b = o3c.Tensor(np.random.rand(100).astype(np.float32), device=self.device)
+
+        # 두 텐서를 더하는 간단한 연산을 수행하여 CUDA 연산을 실행
+        tensor_c = tensor_a + tensor_b
+
+        # 결과 확인을 위해 CPU로 다시 복사
+        result = tensor_c.cpu().numpy()
+        
+        print("CUDA warm-up ICP handler complete.")
+        return result
+    
+    def crop_roi(self, pcd, start, end):
+        min_bound = o3c.Tensor(start, dtype=o3c.float32, device=pcd.device)
+        max_bound = o3c.Tensor(end, dtype=o3c.float32, device=pcd.device)
+        roi_bounding_box = o3d.t.geometry.AxisAlignedBoundingBox(min_bound, max_bound)
+        return pcd.crop(roi_bounding_box)
 
     def update_main_instance(self, event):
         """5Hz로 main_instance의 current_value 값을 업데이트"""
@@ -122,6 +150,9 @@ class ICPHandler:
 
 
     def lidar_callback(self, data):
+        # self.icp_value_ready= True
+        # self.current_value = {"latitude" : 37.633173, "longitude" : 127.077618, "heading" : 0, "COG" : None, "velocity" : 0, "forward_velocity" : 0, "rotational_velocity" : 0}            
+        # return
         # print('lidar : ', rospy.Time.now())
         try:
             # Get the current time and check how much time has passed since the last scan
@@ -129,6 +160,7 @@ class ICPHandler:
             time_diff = (current_time - data.header.stamp).to_sec()
             
             if time_diff > 0.1:
+                # print("ICP time diff : ", time_diff)
                 return
             if self.processed_time == None:
                 self.processed_time = current_time
@@ -136,10 +168,24 @@ class ICPHandler:
 
             # Convert PointCloud2 message to Open3D format
             cloud = self.point_cloud2_to_o3d(data)
+            cloud = self.crop_roi(cloud, start=[-10, -10, -0.2], end=[10, 10, 0.2])
 
-            cloud = self.downsample(cloud)
+            # cloud = self.downsample(cloud)
 
-            cloud = self.translate_pointcloud(cloud, distance=0.5)  # 0.5m를 예시로 적용
+            # # cloud = self.translate_pointcloud(cloud, distance=-0.5)  # 0.5m를 예시로 적용
+
+            # points_cpu = cloud.point.positions.to(o3c.Device("CPU:0")).numpy()
+            # if points_cpu.shape[0] == 0:
+            #     rospy.loginfo("Processed point cloud has no points.")
+            #     return
+
+            # header = std_msgs.msg.Header()
+            # header.stamp = rospy.Time.now()
+            # header.frame_id = data.header.frame_id
+            
+            # points_xyz = pc2.create_cloud_xyz32(header, points_cpu)
+            # self.pub_check_trans.publish(points_xyz)
+
 
             if self.prev_scan is not None and self.main_instance.flag_icp_execute:
                 self.dheading = self.imu_corrector.dheading
@@ -152,7 +198,7 @@ class ICPHandler:
                     max_correspondence_distance=1.5,
                     init_source_to_target=self.icp_initial_guess,
                     estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPoint(),
-                    criteria=o3d.t.pipelines.registration.ICPConvergenceCriteria(max_iteration=10)
+                    criteria=o3d.t.pipelines.registration.ICPConvergenceCriteria(max_iteration=5)
                 )
 
                 # If ICP fitness is good, update position and heading
@@ -173,6 +219,9 @@ class ICPHandler:
                     )
                     lat = round(lat, 8)
                     lon = round(lon, 8)
+                    v_x = round(v_x, 3)
+                    v_y = round(v_y, 3)
+                    
                     # Update global position with ICP result
                     self.prev_latitude = lat
                     self.prev_longitude = lon
@@ -187,18 +236,20 @@ class ICPHandler:
 
                     # Log the result to file
                     # self.log_icp_result_to_file(lat, lon, current_heading, data.header.stamp)
-                    
-                    rotational_velocity = round((icp_heading_change)/(data.header.stamp - self.processed_time).to_sec() , 3)# rad/s
+                    time_processed = (data.header.stamp - self.processed_time).to_sec()
+                    rotational_velocity = round((icp_heading_change)/time_processed, 3)# deg/s
                     velocity = round(math.sqrt(v_x**2+v_y**2), 3)
                     
+                    
+                    
                     self.icp_value_ready= True
-                    self.current_value = {"latitude" : lat, "longitude" : lon, "heading" : current_heading, "forward_velocity" : v_x, "velocity" : velocity, "rotational_velcity" : rotational_velocity}
+                    self.current_value = {"latitude" : lat, "longitude" : lon, "heading" : current_heading, "COG" : None, "velocity" : velocity, "forward_velocity" : round(v_x, 3), "rotational_velocity" : rotational_velocity}
                     self.processed_time = current_time
-                    print("ICP done")
+                    print("ICP done, time processed : ", time_processed)
                     
             else:
                 self.icp_value_ready= False
-                self.current_value = {"latitude" : None, "longitude" : None, "heading" : None, "COG" : None, "velocity" : None, "forward_velociy" : None, "rotational_velocity" : None}
+                self.current_value = {"latitude" : None, "longitude" : None, "heading" : None, "COG" : None, "velocity" : None, "forward_velocity" : None, "rotational_velocity" : None}
 
                 print("prev_scan none : ", rospy.Time.now())
             # Store the current scan for the next iteration
@@ -247,7 +298,7 @@ class ICPHandler:
         v_x = delta_x / delta_time
         v_y = delta_y / delta_time
 
-        print(f"New Lat: {new_lat}, New Lon: {new_lon}, v_x: {v_x}, v_y: {v_y}, delta_time: {delta_time}")
+        # print(f"New Lat: {new_lat}, New Lon: {new_lon}, v_x: {v_x}, v_y: {v_y}, delta_time: {delta_time}")
         return new_lat, new_lon, v_x, v_y
     
     def apply_imu_to_icp_guess(self):
@@ -264,7 +315,7 @@ class ICPHandler:
         # heading_diff = np.radians(self.prev_heading_changed)
         # print("dheading : ", self.dheading)
         # print("dx dy : ", dx, dy)
-        print("prev x y : ", self.prev_x_moved, self.prev_y_moved)
+        # print("prev x y : ", self.prev_x_moved, self.prev_y_moved)
         self.icp_initial_guess = np.array([
             [np.cos(heading_diff), -np.sin(heading_diff), 0, self.prev_x_moved],
             [np.sin(heading_diff), np.cos(heading_diff),  0, self.prev_y_moved],
@@ -331,7 +382,7 @@ class ICPHandler:
         # PointCloud의 모든 점들을 dx, dy 만큼 이동시킴
         
 
-        cloud = cloud.translate((0, distance, 0))
+        cloud = cloud.translate((distance,0 , 0))
 
         return cloud
 

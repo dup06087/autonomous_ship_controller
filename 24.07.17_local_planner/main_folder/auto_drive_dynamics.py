@@ -249,8 +249,8 @@ def calculate_pwm_auto(self, forward_velocity, rotational_velocity, desired_forw
         v_measured = forward_velocity
         omega_measured = -rotational_velocity * math.pi / 180 # deg
         # omega_measured = -compute_angular_velocity(self) # deg
-        print("current v,w : ", v_measured, omega_measured) 
-        print("desired v,w(rad) : ", desired_forward_velocity, desired_angular_velocity) # rad
+        # print("current v,w : ", v_measured, omega_measured) 
+        # print("desired v,w(rad) : ", desired_forward_velocity, desired_angular_velocity) # rad
         
         if desired_forward_velocity == 0 and desired_angular_velocity == 0:
             self.current_value["pwml_auto"] = 1500

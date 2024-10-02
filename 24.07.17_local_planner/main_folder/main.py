@@ -44,7 +44,8 @@ class boat:
             # gnss get params below
             'velocity': None, 'heading': 0, 'forward_velocity': 0, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None, 
             "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0, 'COG' : None, 'rotational_velocity' : 0,
-            "arrived" : False, "flag_autodrive" : False
+            "arrived" : False, "flag_autodrive" : False, 
+            "icp_localization" : False
             # gnss end
             } # cf. com_status undefined
         
@@ -334,6 +335,12 @@ class boat:
             self.current_value["flag_autodrive"] = self.flag_autodrive
         except Exception as e:
             print("flag_autodrive update error : ", e)        
+        
+        try:
+            self.current_value["icp_localization"] = self.icp_handler.icp_value_ready
+        except Exception as e:
+            print("icp_localization update error : ", e)  
+            
 
     def update_pc_command(self):
         try:

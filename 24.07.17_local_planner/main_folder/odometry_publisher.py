@@ -38,7 +38,7 @@ class VelocityPublisher:
                     odom.twist.twist.angular.z = 0
                 else:        
                     odom.twist.twist.linear.x = forward_velocity
-                    odom.twist.twist.angular.z = -angular_velocity
+                    odom.twist.twist.angular.z = -angular_velocity * 180/math.pi
 
                 self.pub.publish(odom)
                 self.rate.sleep()
