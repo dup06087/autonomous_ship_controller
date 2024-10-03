@@ -20,27 +20,18 @@ class LiDARIMUEKF:
         self.xEst[2, 0] = 8.955 # 초기 theta 설정 (예시 값)
         
         self.PEst = np.eye(5)  # 공분산 행렬 초기화
+        # 자이로스코프 노이즈 (rad^2/s^2) at 25 Hz
+        # 자이로스코프 노이즈 (rad^2/s^2) at 10 Hz
+        gyro_noise_variance = 2.74e-4
 
-        # 자이로스코프 노이즈 분산 (rad^2/s^2) at 10 Hz
-        gyro_noise_variance = (0.0095 * np.pi / 180) ** 2  # °/s -> rad/s 변환
+        # 가속도계 노이즈 (m^2/s^4) at 10 Hz
+        acc_noise_variance = 4.71e-4
 
-        # 가속도계 노이즈 분산 (m^2/s^4) at 10 Hz
-        acc_noise_variance = (0.00022 * 9.81) ** 2  # g -> m/s^2 변환
-
-        # 5x5 공분산 행렬 (경도, 위도, 헤딩, 동쪽 속도, 북쪽 속도)
-        self.Q = np.diag([
-            acc_noise_variance,  # 경도에 대한 가속도계 잡음 (속도를 통해 위치에 영향을 줌)
-            acc_noise_variance,  # 위도에 대한 가속도계 잡음 (속도를 통해 위치에 영향을 줌)
-            gyro_noise_variance,  # 헤딩에 대한 자이로스코프 잡음
-            acc_noise_variance,  # 동쪽 속도에 대한 가속도계 잡음
-            acc_noise_variance   # 북쪽 속도에 대한 가속도계 잡음
-        ])
+        # 5x5 공분산 행렬 (가속도 3축, 자이로스코프 2축)
+        self.Q = np.diag([acc_noise_variance, acc_noise_variance, acc_noise_variance, 
+                        gyro_noise_variance, gyro_noise_variance])
+        self.R_cov = np.eye(3) * 1e-6  # 측정 잡음 공분산 행렬 (LiDAR 측정 오차)
         
-        # 측정 잡음 공분산 행렬 (LiDAR 측정 오차)
-        lat_lon_variance = (1e-5) ** 2  # 위도, 경도의 초기 오차를 약 1미터 수준으로 가정 (라디안 변환) 4, 5, 6     
-        heading_variance = (np.radians(1)) ** 2  # 헤딩의 초기 오차를 1.5도 수준으로 가정
-
-        self.R_cov = np.diag([lat_lon_variance, lat_lon_variance, heading_variance])
         self.previous_time = rospy.Time.now()
 
         # 결과 저장을 위한 파일
@@ -135,7 +126,7 @@ class LiDARIMUEKF:
         self.xEst[0, 0] += delta_lon  # 경도 업데이트
 
         # 방향 예측
-        self.xEst[2, 0] -= wz * delta_time  # 방향 예측
+        self.xEst[2, 0] -= math.degrees(wz) * delta_time  # 방향 예측
 
         # 속도 예측
         self.xEst[3, 0] += a_east * delta_time  # 동쪽 속도 예측

@@ -17,36 +17,28 @@ class LiDARIMUEKF:
         self.xEst = np.zeros((5, 1))  # 초기 상태
         self.xEst[0, 0] = 127.07844109  # 초기 경도 설정 (예시 값)
         self.xEst[1, 0] = 37.62887769   # 초기 위도 설정 (예시 값)
-        self.xEst[2, 0] = 8.955 # 초기 theta 설정 (예시 값)
+        self.xEst[2, 0] = 8.955 # 초기 위도 설정 (예시 값)
         
         self.PEst = np.eye(5)  # 공분산 행렬 초기화
+        # 자이로스코프 노이즈 (rad^2/s^2) at 25 Hz
+        # 자이로스코프 노이즈 (rad^2/s^2) at 10 Hz
+        gyro_noise_variance = 2.74e-8
 
-        # 자이로스코프 노이즈 분산 (rad^2/s^2) at 10 Hz
-        gyro_noise_variance = (0.0095 * np.pi / 180) ** 2  # °/s -> rad/s 변환
+        # 가속도계 노이즈 (m^2/s^4) at 10 Hz
+        acc_noise_variance = 4.71e-6
 
-        # 가속도계 노이즈 분산 (m^2/s^4) at 10 Hz
-        acc_noise_variance = (0.00022 * 9.81) ** 2  # g -> m/s^2 변환
+        # 5x5 공분산 행렬 (가속도 3축, 자이로스코프 2축)
+        self.Q = np.diag([acc_noise_variance, acc_noise_variance, acc_noise_variance, 
+                        gyro_noise_variance, gyro_noise_variance])
+        self.R_cov = np.eye(3) * 1e-5  # 측정 잡음 공분산 행렬 (LiDAR 측정 오차)
 
-        # 5x5 공분산 행렬 (경도, 위도, 헤딩, 동쪽 속도, 북쪽 속도)
-        self.Q = np.diag([
-            acc_noise_variance,  # 경도에 대한 가속도계 잡음 (속도를 통해 위치에 영향을 줌)
-            acc_noise_variance,  # 위도에 대한 가속도계 잡음 (속도를 통해 위치에 영향을 줌)
-            gyro_noise_variance,  # 헤딩에 대한 자이로스코프 잡음
-            acc_noise_variance,  # 동쪽 속도에 대한 가속도계 잡음
-            acc_noise_variance   # 북쪽 속도에 대한 가속도계 잡음
-        ])
-        
-        # 측정 잡음 공분산 행렬 (LiDAR 측정 오차)
-        lat_lon_variance = (1e-5) ** 2  # 위도, 경도의 초기 오차를 약 1미터 수준으로 가정 (라디안 변환) 4, 5, 6     
-        heading_variance = (np.radians(1)) ** 2  # 헤딩의 초기 오차를 1.5도 수준으로 가정
-
-        self.R_cov = np.diag([lat_lon_variance, lat_lon_variance, heading_variance])
-        self.previous_time = rospy.Time.now()
+        self.previous_time = None
 
         # 결과 저장을 위한 파일
         self.log_file_path = os.path.join(os.getcwd(), "ekf_result.txt")
         with open(self.log_file_path, "w") as f:
-            f.write("")  # 파일 초기화
+            # pass
+            f.write("")  # 헤더 작성
             
         # Publisher for the final result
         self.ekf_pub = rospy.Publisher('/ekf_output', Float64MultiArray, queue_size=10)
@@ -55,23 +47,82 @@ class LiDARIMUEKF:
         self.imu_sub = rospy.Subscriber('/imu/data', Imu, self.imu_callback)
         self.lidar_sub = rospy.Subscriber('/icp_result', Float64MultiArray, self.lidar_callback)
 
-        print('ready')
-        
     def imu_callback(self, imu_data):
         # 현재 시간 확인 및 delta_time 계산
+        
+        if self.previous_time == None:
+            self.previous_time = rospy.Time.now()
+            return
+        
         current_time = rospy.Time.now()
+        
         delta_time = (current_time - self.previous_time).to_sec()
-        self.previous_time = current_time
+
+        orientation = imu_data.orientation
+        roll, pitch, yaw = self.quaternion_to_euler(orientation.x, orientation.y, orientation.z, orientation.w)
+    
+        # Correct linear acceleration (in local frame)
+        linear_acceleration = imu_data.linear_acceleration
+        corrected_acc = self.rotate_acceleration(linear_acceleration.x, linear_acceleration.y, linear_acceleration.z, roll, pitch)
+        ax, ay, wz = corrected_acc[0], corrected_acc[1], imu_data.angular_velocity.z
 
         # IMU에서 받은 데이터 처리 (가속도 및 각속도)
-        ax, ay, wz = self.process_imu_data(imu_data)
+        # ax, ay, wz = self.process_imu_data(imu_data)
 
         # IMU 데이터로 Predict 단계 수행 (주기적으로)
         # self.predict(ax, ay, wz, delta_time)
         self.predict(ax, ay, wz, 0.1)
         # 상태 퍼블리시 (예측된 상태)
         self.publish_state()
+        self.previous_time = current_time
 
+
+    def quaternion_to_euler(self, x, y, z, w):
+        """Convert quaternion to Euler angles (roll, pitch, yaw)."""
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = math.atan2(sinr_cosp, cosr_cosp)
+
+        sinp = 2 * (w * y - z * x)
+        if abs(sinp) >= 1:
+            pitch = math.copysign(math.pi / 2, sinp)
+        else:
+            pitch = math.asin(sinp)
+
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = math.atan2(siny_cosp, cosy_cosp)
+
+        return roll, pitch, yaw
+
+    def rotate_acceleration(self, ax, ay, az, roll, pitch):
+        """Rotate acceleration data from IMU's local frame to global frame without yaw rotation."""
+        
+        # Roll 회전 행렬
+        R_x = np.array([
+            [1, 0, 0],
+            [0, math.cos(roll), -math.sin(roll)],
+            [0, math.sin(roll), math.cos(roll)]
+        ])
+        
+        # Pitch 회전 행렬
+        R_y = np.array([
+            [math.cos(pitch), 0, math.sin(pitch)],
+            [0, 1, 0],
+            [-math.sin(pitch), 0, math.cos(pitch)]
+        ])
+        
+        # Yaw를 고려하지 않고 Roll과 Pitch만 적용
+        R = np.dot(R_y, R_x)
+        
+        # 가속도 벡터
+        acceleration = np.array([ax, ay, az])
+        
+        # 변환된 가속도
+        corrected_acceleration = np.dot(R, acceleration)
+        
+        return corrected_acceleration
+    
     def lidar_callback(self, msg):
         # LiDAR에서 받은 ICP 결과 (위도, 경도, 헤딩)를 처리합니다.
         lidar_lat = msg.data[0]  # 위도
@@ -135,36 +186,23 @@ class LiDARIMUEKF:
         self.xEst[0, 0] += delta_lon  # 경도 업데이트
 
         # 방향 예측
-        self.xEst[2, 0] -= wz * delta_time  # 방향 예측
+        self.xEst[2, 0] -= math.degrees(wz) * delta_time  # 방향 예측
 
         # 속도 예측
         self.xEst[3, 0] += a_east * delta_time  # 동쪽 속도 예측
         self.xEst[4, 0] += a_north * delta_time  # 북쪽 속도 예측
 
         # 상태 전이 모델 자코비안 행렬(F) 계산
-        # F = np.eye(5)
-
-        # # 경도와 위도에 대한 속도의 영향을 반영한 자코비안
-        # F[0, 3] = delta_time / (self.R * np.cos(np.radians(self.xEst[1, 0])))  # 경도에 대한 동쪽 속도 영향
-        # F[1, 4] = delta_time / self.R  # 위도에 대한 북쪽 속도 영향
-
-        # # theta에 대한 경도와 위도 편미분 (속도 변환 영향 반영)
-        # F[0, 2] = (-self.xEst[3, 0] * delta_time * np.sin(theta) - self.xEst[4, 0] * delta_time * np.cos(theta)) / (self.R * np.cos(np.radians(self.xEst[1, 0])))  # 경도에 대한 theta 영향
-        # F[1, 2] = (self.xEst[3, 0] * delta_time * np.cos(theta) - self.xEst[4, 0] * delta_time * np.sin(theta)) / self.R  # 위도에 대한 theta 영향
-
-
-        # 상태 전이 모델 자코비안 행렬(F) 계산 (Matlab 결과 반영)
         F = np.eye(5)
 
-        # 자코비안 행렬 업데이트
-        F[0, 1] = (np.sin(np.radians(self.xEst[1, 0])) * (((ay * np.cos(theta)) / 2 + (ax * np.sin(theta)) / 2) * delta_time**2 + self.xEst[3, 0] * delta_time)) / (self.R * np.cos(np.radians(self.xEst[1, 0]))**2)
-        F[0, 2] = (delta_time**2 * ((ax * np.cos(theta)) / 2 - (ay * np.sin(theta)) / 2)) / (self.R * np.cos(np.radians(self.xEst[1, 0])))
-        F[0, 3] = delta_time / (self.R * np.cos(np.radians(self.xEst[1, 0])))
-        F[1, 2] = -(delta_time**2 * (ay * np.cos(theta) + ax * np.sin(theta))) / (2 * self.R)
-        F[1, 4] = delta_time / self.R
-        F[3, 2] = delta_time * (ax * np.cos(theta) - ay * np.sin(theta))
-        F[4, 2] = -delta_time * (ay * np.cos(theta) + ax * np.sin(theta))
-        
+        # 경도와 위도에 대한 속도의 영향을 반영한 자코비안
+        F[0, 3] = delta_time / (self.R * np.cos(np.radians(self.xEst[1, 0])))  # 경도에 대한 동쪽 속도 영향
+        F[1, 4] = delta_time / self.R  # 위도에 대한 북쪽 속도 영향
+
+        # theta에 대한 경도와 위도 편미분 (속도 변환 영향 반영)
+        F[0, 2] = (-self.xEst[3, 0] * delta_time * np.sin(theta) - self.xEst[4, 0] * delta_time * np.cos(theta)) / (self.R * np.cos(np.radians(self.xEst[1, 0])))  # 경도에 대한 theta 영향
+        F[1, 2] = (self.xEst[3, 0] * delta_time * np.cos(theta) - self.xEst[4, 0] * delta_time * np.sin(theta)) / self.R  # 위도에 대한 theta 영향
+
         # 공분산 행렬 예측
         self.PEst = F @ self.PEst @ F.T + self.Q
         self.save_to_file(self.xEst[1,0], self.xEst[0,0], self.xEst[2,0])
