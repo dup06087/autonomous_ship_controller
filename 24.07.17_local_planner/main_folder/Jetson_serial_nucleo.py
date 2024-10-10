@@ -120,7 +120,7 @@ class serial_nucleo:
             mode_chk = int(mode_chk)
             pwml_chk = int(parsed_data.get('PWML', '-1').strip())
             pwmr_chk = int(parsed_data.get('PWMR', '-1').strip())
-            # print("parsed : {}, {}, {} ".format(parsed_mode, parsed_pwml, parsed_pwmr))
+            # print("parsed : {}, {}, {} ".format(mode_chk, pwml_chk, pwmr_chk))
             nucleo_values = mode_chk, pwml_chk, pwmr_chk
             # print("get data from nucleo : ", nucleo_values)
             

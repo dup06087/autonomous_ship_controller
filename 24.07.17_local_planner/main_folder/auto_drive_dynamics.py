@@ -285,7 +285,7 @@ def calculate_pwm_auto(self, forward_velocity, rotational_velocity, desired_forw
         PWM_left_mapped = 1500 + (PWM_left_normalized / max_pwm) * 500
         PWM_right_mapped = 1500 + (PWM_right_normalized / max_pwm) * 500
 
-        alpha = 0.75
+        alpha = 0.2
         PWM_left_LPF = alpha * PWM_left_mapped + (1 - alpha) * self.prev_value["pwml_auto"]
         PWM_right_LPF = alpha * PWM_right_mapped + (1 - alpha) * self.prev_value["pwmr_auto"]
         

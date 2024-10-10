@@ -2,6 +2,7 @@ import rospy
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import Twist, Pose, Point, Quaternion
 import math
+import random
 
 class VelocityPublisher:
     def __init__(self, mother_instance):
@@ -31,16 +32,19 @@ class VelocityPublisher:
                 odom.twist.twist = Twist()
                 
                 forward_velocity = self.mother_instance.current_value['forward_velocity']
-                angular_velocity = self.mother_instance.current_value['rotational_velocity']
+                angular_velocity = self.mother_instance.current_value['rotational_velocity'] # deg/s
 
                 if forward_velocity is None or angular_velocity is None:
                     odom.twist.twist.linear.x = 0
                     odom.twist.twist.angular.z = 0
                 else:        
                     odom.twist.twist.linear.x = forward_velocity
-                    odom.twist.twist.angular.z = -angular_velocity * 180/math.pi
+                    odom.twist.twist.angular.z = -angular_velocity * math.pi/180
+                    # odom.twist.twist.linear.x = self.mother_instance.linear_x
+                    # odom.twist.twist.angular.z = self.mother_instance.angular_z
 
                 self.pub.publish(odom)
+                # print("(odom) current values : ", odom.twist.twist.linear.x, odom.twist.twist.angular.z)
                 self.rate.sleep()
 
             except Exception as e:

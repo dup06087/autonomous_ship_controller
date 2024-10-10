@@ -46,6 +46,7 @@ class Server_pc:
 
                 self.flag_socket_init_cycle[0] = True
                 time.sleep(0.05)    
+                
             except (ConnectionResetError, BrokenPipeError) as e:
                 print("Receive connection lost.", e)
                 self.flag_socket_pc[0] = False

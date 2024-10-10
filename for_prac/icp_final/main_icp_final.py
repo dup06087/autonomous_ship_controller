@@ -30,11 +30,11 @@ import datetime
 
 
 '''rect1'''
-# initial_latitude_raw = 3737.7326613
-# initial_latitude_direction = 'N'
-# initial_longitude_raw = 12704.7064656
-# initial_longitude_direction = 'E'
-# initial_heading = 8.955
+initial_latitude_raw = 3737.7326613
+initial_latitude_direction = 'N'
+initial_longitude_raw = 12704.7064656
+initial_longitude_direction = 'E'
+initial_heading = 8.955
 
 '''rhombus'''
 # initial_latitude_raw = 3737.7328295
@@ -44,11 +44,11 @@ import datetime
 # initial_heading = 335.797
 
 '''round1'''
-initial_latitude_raw = 3737.7327122
-initial_latitude_direction = 'N'
-initial_longitude_raw = 12704.7064321
-initial_longitude_direction = 'E'
-initial_heading =9.532
+# initial_latitude_raw = 3737.7327122
+# initial_latitude_direction = 'N'
+# initial_longitude_raw = 12704.7064321
+# initial_longitude_direction = 'E'
+# initial_heading =9.532
 
 
 
@@ -155,7 +155,7 @@ class IMUCorrector:
 
         # Update heading using angular velocity (change in heading = angular velocity * time)
         self.dheading_step = angular_velocity_z * delta_time * 180 / math.pi
-        self.dheading += self.dheading_step 
+        self.dheading += self.dheading_step * 3
         # print("dh_step, dh : ", self.dheading_step, self.dheading)
         # Update the current heading by adding the incremental heading change (dheading)
         # Use self.prev_heading for this; initialize it properly
@@ -264,7 +264,7 @@ class ICPHandler:
         self.icp_result_pub = rospy.Publisher('/icp_result', Float64MultiArray, queue_size=1)
         self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=1)
 
-        self.log_file = open(self.icp_data_file, "a")
+        self.log_file = open(self.icp_data_file, "w")
         self.processed_time = None
 
         self.dnorth = 0
@@ -399,8 +399,8 @@ class ICPHandler:
         dy = self.dnorth * math.sin(heading_rad) - self.dnorth * math.cos(heading_rad)
 
         #이거는 dheading()
-        # heading_diff = np.radians(self.dheading)
-        heading_diff = np.radians(self.prev_heading_changed)
+        heading_diff = np.radians(self.dheading) ### work
+        # heading_diff = np.radians(self.prev_heading_changed) ## not work
         # print("dheading : ", self.dheading)
         print("dx dy : ", dx, dy)
         print("prev x y : ", self.prev_x_moved, self.prev_y_moved)

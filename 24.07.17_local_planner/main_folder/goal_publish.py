@@ -117,7 +117,7 @@ class NavigationController:
                     
                     self.pub_goal.publish(goal)
                     # print("Goal published: Position - ({}, {}), Orientation - {}".format(dx, dy, quaternion))
-                    rospy.sleep(0.2)
+                    rospy.sleep(1)
                     
                 else:
                     # 목표지점까지 취소하는것 : 이것은 flag autodrive보다도 엄격히 적용

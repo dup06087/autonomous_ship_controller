@@ -168,7 +168,7 @@ class ICPHandler:
 
             # Convert PointCloud2 message to Open3D format
             cloud = self.point_cloud2_to_o3d(data)
-            cloud = self.crop_roi(cloud, start=[-10, -10, -0.2], end=[10, 10, 0.2])
+            # cloud = self.crop_roi(cloud, start=[-10, -10, -0.2], end=[10, 10, 0.2])
 
             # cloud = self.downsample(cloud)
 
@@ -215,7 +215,7 @@ class ICPHandler:
                     # Calculate new global position based on ICP translation result
                     lat, lon, v_x, v_y = self.calculate_new_position(
                         self.prev_latitude, self.prev_longitude,
-                        -translation[2], translation[0], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
+                        translation[0]*1.2, 0, self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
                     )
                     lat = round(lat, 8)
                     lon = round(lon, 8)
@@ -227,8 +227,12 @@ class ICPHandler:
                     self.prev_longitude = lon
                     self.prev_heading = current_heading
                     # self.imu_corrector.post_icp_reset(v_x, v_y)
+                    # self.prev_x_moved = translation[0]
+                    # self.prev_y_moved = translation[1]
                     self.prev_x_moved = translation[0]
-                    self.prev_y_moved = translation[1]
+                    self.prev_y_moved = -translation[1]
+                    
+                    
                     self.prev_heading_changed = icp_heading_change
                     
                     # Publish updated ICP result
@@ -245,13 +249,13 @@ class ICPHandler:
                     self.icp_value_ready= True
                     self.current_value = {"latitude" : lat, "longitude" : lon, "heading" : current_heading, "COG" : None, "velocity" : velocity, "forward_velocity" : round(v_x, 3), "rotational_velocity" : rotational_velocity}
                     self.processed_time = current_time
-                    print("ICP done, time processed : ", time_processed)
+                    # print("ICP done, time processed : ", time_processed)
                     
             else:
                 self.icp_value_ready= False
                 self.current_value = {"latitude" : None, "longitude" : None, "heading" : None, "COG" : None, "velocity" : None, "forward_velocity" : None, "rotational_velocity" : None}
 
-                print("prev_scan none : ", rospy.Time.now())
+                # print("prev_scan none : ", rospy.Time.now())
             # Store the current scan for the next iteration
             self.prev_scan = cloud
 
@@ -276,11 +280,11 @@ class ICPHandler:
         """Convert local ICP dx, dy to latitude and longitude updates, and calculate velocities."""
         if heading > 180:
             heading -=360
-        heading_rad = math.radians(heading-90)
+        heading_rad = math.radians(heading)
         
         # Convert local dx, dy to global north/east deltas
-        delta_north = delta_x * math.cos(heading_rad) - (delta_y) * math.sin(heading_rad)
-        delta_east = delta_x * math.sin(heading_rad) + (delta_y) * math.cos(heading_rad)
+        delta_north = delta_x * math.cos(heading_rad) - (-delta_y) * math.sin(heading_rad)
+        delta_east = delta_x * math.sin(heading_rad) + (-delta_y) * math.cos(heading_rad)
 
         # Earth radius in meters
         R = 6378137.0

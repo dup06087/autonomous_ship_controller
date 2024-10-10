@@ -121,11 +121,12 @@ class PointCloudProcessor:
             points = np.column_stack((pc_array['x'], pc_array['y'], pc_array['z']))
             pcd = o3d.t.geometry.PointCloud(o3c.Tensor(points, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
 
-            # pcd = self.crop_roi(pcd, start=[-15, -15, self.vff_force], end=[15, 15, 0.2])
+            pcd = self.crop_roi(pcd, start=[-50, -50, self.vff_force], end=[50, 50, 0.2])
             pcd = self.voxel_down_sampling(pcd, voxel_size=self.voxel_size)
             pcd = self.rotate_point_cloud_by_pitch(pcd)
 
-            ship_body_bounds = {'min': [-5, -5, -2], 'max': [5, 5, 2]}
+            # ship_body_bounds = {'min': [-1.1, -1, -1], 'max': [1.1, 1, 0.5]}
+            ship_body_bounds = {'min': [-2, -2, -1], 'max': [2, 2, 0.5]}
             pcd = self.remove_ship_body(pcd, ship_body_bounds)
 
             points_cpu = pcd.point.positions.to(o3c.Device("CPU:0")).numpy()

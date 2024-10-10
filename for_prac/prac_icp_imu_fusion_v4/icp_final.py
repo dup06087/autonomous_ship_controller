@@ -30,18 +30,18 @@ import datetime
 
 
 '''rect1'''
-# initial_latitude_raw = 3737.7326613
-# initial_latitude_direction = 'N'
-# initial_longitude_raw = 12704.7064656
-# initial_longitude_direction = 'E'
-# initial_heading = 8.955
+initial_latitude_raw = 3737.7326613
+initial_latitude_direction = 'N'
+initial_longitude_raw = 12704.7064656
+initial_longitude_direction = 'E'
+initial_heading = 8.955
 
 '''rhombus'''
-initial_latitude_raw = 3737.7328295
-initial_latitude_direction = 'N'
-initial_longitude_raw = 12704.7068961
-initial_longitude_direction = 'E'
-initial_heading = 335.797
+# initial_latitude_raw = 3737.7328295
+# initial_latitude_direction = 'N'
+# initial_longitude_raw = 12704.7068961
+# initial_longitude_direction = 'E'
+# initial_heading = 335.797
 
 '''round1'''
 # initial_latitude_raw = 3737.7327122
@@ -301,7 +301,7 @@ class ICPHandler:
 
             cloud = self.downsample(cloud)
 
-            cloud = self.translate_pointcloud(cloud, distance=0.5)  # 0.5m를 예시로 적용
+            # cloud = self.translate_pointcloud(cloud, distance=0.5)  # 0.5m를 예시로 적용
 
 
             if self.prev_scan is not None:
@@ -405,8 +405,8 @@ class ICPHandler:
         print("dx dy : ", dx, dy)
         print("prev x y : ", self.prev_x_moved, self.prev_y_moved)
         self.icp_initial_guess = np.array([
-            [np.cos(heading_diff), -np.sin(heading_diff), 0, self.prev_x_moved],
-            [np.sin(heading_diff), np.cos(heading_diff),  0, self.prev_y_moved],
+            [np.cos(heading_rad), -np.sin(heading_rad), 0, self.prev_x_moved],
+            [np.sin(heading_rad), np.cos(heading_rad),  0, 0],
             [0,             0,              1, 0],
             [0,             0,              0, 1]
         ])

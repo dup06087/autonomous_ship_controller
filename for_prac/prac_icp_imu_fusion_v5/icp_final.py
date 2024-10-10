@@ -10,6 +10,17 @@ import math
 import time
 import json
 import datetime
+from scipy.spatial.transform import Rotation as R
+
+
+import sys
+import signal
+
+def signal_handler(sig, frame):
+    print('You pressed Ctrl+C!')
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
 
 # 수동으로 입력한 원래 값 (도와 분 형식)
 
@@ -30,18 +41,18 @@ import datetime
 
 
 '''rect1'''
-# initial_latitude_raw = 3737.7326613
-# initial_latitude_direction = 'N'
-# initial_longitude_raw = 12704.7064656
-# initial_longitude_direction = 'E'
-# initial_heading = 8.955
+initial_latitude_raw = 3737.7326613
+initial_latitude_direction = 'N'
+initial_longitude_raw = 12704.7064656
+initial_longitude_direction = 'E'
+initial_heading = 8.955
 
 '''rhombus'''
-initial_latitude_raw = 3737.7328295
-initial_latitude_direction = 'N'
-initial_longitude_raw = 12704.7068961
-initial_longitude_direction = 'E'
-initial_heading = 335.797
+# initial_latitude_raw = 3737.7328295
+# initial_latitude_direction = 'N'
+# initial_longitude_raw = 12704.7068961
+# initial_longitude_direction = 'E'
+# initial_heading = 335.797
 
 '''round1'''
 # initial_latitude_raw = 3737.7327122
@@ -165,15 +176,27 @@ class IMUCorrector:
         # Extract orientation and convert to roll, pitch, yaw
         orientation = data.orientation
         roll, pitch, yaw = self.quaternion_to_euler(orientation.x, orientation.y, orientation.z, orientation.w)
-    
-        # Correct linear acceleration (in local frame)
+
+        # 선형 가속도에서 중력 성분 제거 후 free acceleration 계산
         linear_acceleration = data.linear_acceleration
-        corrected_acc = self.rotate_acceleration(linear_acceleration.x, linear_acceleration.y, linear_acceleration.z, roll, pitch, yaw)
+        free_acc = self.remove_gravity_and_correct(
+            linear_acceleration.x, 
+            linear_acceleration.y, 
+            linear_acceleration.z, 
+            roll, pitch, yaw
+        )
+        
+        # Correct linear acceleration (in local frame)
+        # print("linear_acc : ", linear_acceleration.x, linear_acceleration.y, linear_acceleration.z)
+        # corrected_acc = self.rotate_acceleration(linear_acceleration.x, linear_acceleration.y, linear_acceleration.z, roll, pitch, yaw)
 
+        # print("free_acc : ", free_acc)
+        # print("corrected_acc : ", corrected_acc)
+        
         # Update velocity in local frame: v = v0 + a * t
-        self.vx += corrected_acc[0] * delta_time
-        self.vy += corrected_acc[1] * delta_time
-
+        self.vx += free_acc[0] * delta_time
+        self.vy += free_acc[1] * delta_time
+        print("velocity : ", self.vx, self.vy)
         # Transform velocity from local frame to global frame using current heading
         global_v_north = self.vx * math.cos(heading_rad) - -self.vy * math.sin(heading_rad)
         global_v_east = self.vx * math.sin(heading_rad) + -self.vy * math.cos(heading_rad)
@@ -189,6 +212,27 @@ class IMUCorrector:
         self.prev_heading = current_heading
         self.prev_time = current_time
 
+    def remove_gravity_and_correct(self, ax, ay, az, roll, pitch, yaw):
+        # Yaw를 0으로 만들기 위한 회전 행렬 계산
+        rotation = R.from_euler('xyz', [roll, pitch, yaw])
+        yaw_correction = R.from_euler('z', -yaw)
+        corrected_rotation = yaw_correction * rotation
+
+        # 중력 벡터 계산 (z축 방향으로 9.81 m/s²)
+        g = 9.81
+        gravity = np.array([0, 0, g])
+
+        # Yaw를 상쇄한 회전 행렬로 중력 벡터 변환
+        rotation_matrix = corrected_rotation.as_matrix()
+        gravity_local = rotation_matrix.T @ gravity
+
+        # 가속도에서 중력 성분 제거 (free acceleration 계산)
+        free_acc_x = ax - gravity_local[0]
+        free_acc_y = ay - gravity_local[1]
+        free_acc_z = az - gravity_local[2]
+
+        return free_acc_x, free_acc_y, free_acc_z
+    
     def pre_icp_reset(self):
         """Reset only the IMU deltas before ICP starts, keep velocities intact."""
         self.dnorth = 0
@@ -264,7 +308,9 @@ class ICPHandler:
         self.icp_result_pub = rospy.Publisher('/icp_result', Float64MultiArray, queue_size=1)
         self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=1)
 
-        self.log_file = open(self.icp_data_file, "a")
+        with open(self.icp_data_file, 'w') as f:
+            f.write("")
+            
         self.processed_time = None
 
         self.dnorth = 0
@@ -301,7 +347,7 @@ class ICPHandler:
 
             cloud = self.downsample(cloud)
 
-            cloud = self.translate_pointcloud(cloud, distance=0.5)  # 0.5m를 예시로 적용
+            # cloud = self.translate_pointcloud(cloud, distance=0.5)  # 0.5m를 예시로 적용
 
 
             if self.prev_scan is not None:
@@ -315,7 +361,7 @@ class ICPHandler:
                     max_correspondence_distance=1.5,
                     init_source_to_target=self.icp_initial_guess,
                     estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPoint(),
-                    criteria=o3d.t.pipelines.registration.ICPConvergenceCriteria(max_iteration=10)
+                    criteria=o3d.t.pipelines.registration.ICPConvergenceCriteria(max_iteration=30)
                 )
 
                 # If ICP fitness is good, update position and heading
@@ -329,19 +375,20 @@ class ICPHandler:
                     icp_heading_change = np.degrees(rotation_euler[2])
                     current_heading = (self.prev_heading - icp_heading_change) % 360
 
-                    # Calculate new global position based on ICP translation result
+                    #Calculate new global position based on ICP translation result
                     lat, lon, v_x, v_y = self.calculate_new_position(
                         self.prev_latitude, self.prev_longitude,
-                        -translation[2], translation[0], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
+                        translation[0]*1.2, 0, self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
                     )
-
+                    
                     # Update global position with ICP result
                     self.prev_latitude = lat
                     self.prev_longitude = lon
                     self.prev_heading = current_heading
                     self.imu_corrector.post_icp_reset(v_x, v_y)
+                    print("calculated velocity : ", v_x, v_y)
                     self.prev_x_moved = translation[0]
-                    self.prev_y_moved = translation[1]
+                    self.prev_y_moved = -translation[1]
                     self.prev_heading_changed = icp_heading_change
                     
                     # Publish updated ICP result
@@ -364,11 +411,11 @@ class ICPHandler:
         """Convert local ICP dx, dy to latitude and longitude updates, and calculate velocities."""
         if heading > 180:
             heading -=360
-        heading_rad = math.radians(heading-90)
+        heading_rad = math.radians(heading)
         
         # Convert local dx, dy to global north/east deltas
-        delta_north = delta_x * math.cos(heading_rad) - (delta_y) * math.sin(heading_rad)
-        delta_east = delta_x * math.sin(heading_rad) + (delta_y) * math.cos(heading_rad)
+        delta_north = delta_x * math.cos(heading_rad) - (-delta_y) * math.sin(heading_rad)
+        delta_east = delta_x * math.sin(heading_rad) + (-delta_y) * math.cos(heading_rad)
 
         # Earth radius in meters
         R = 6378137.0
@@ -395,21 +442,36 @@ class ICPHandler:
         heading_rad = np.radians(self.prev_heading) 
     
         # Compute local frame deltas using the inverse rotation matrix
-        dx = self.dnorth * math.cos(heading_rad) + self.dnorth * math.sin(heading_rad)
-        dy = self.dnorth * math.sin(heading_rad) - self.dnorth * math.cos(heading_rad)
+        dx = self.dnorth * math.cos(heading_rad) + self.deast * math.sin(heading_rad)
+        dy = self.dnorth * math.sin(heading_rad) - self.deast * math.cos(heading_rad)
 
         #이거는 dheading()
         heading_diff = np.radians(self.dheading)
         # heading_diff = np.radians(self.prev_heading_changed)
-        print("dheading : ", self.dheading)
+        # print("dheading : ", self.dheading)
         print("dx dy : ", dx, dy)
-        print("prev x y : ", self.prev_x_moved, self.prev_y_moved)
+        # print("prev x y : ", self.prev_x_moved, self.prev_y_moved)
         self.icp_initial_guess = np.array([
             [np.cos(heading_diff), -np.sin(heading_diff), 0, self.prev_x_moved],
             [np.sin(heading_diff), np.cos(heading_diff),  0, self.prev_y_moved],
             [0,             0,              1, 0],
             [0,             0,              0, 1]
         ])
+        
+        self.icp_initial_guess = np.array([
+            [np.cos(heading_diff), -np.sin(heading_diff), 0, dx+1],
+            [np.sin(heading_diff), np.cos(heading_diff),  0, dy],
+            [0,             0,              1, 0],
+            [0,             0,              0, 1]
+        ])
+        
+        # self.icp_initial_guess = np.array([
+        #     [1, 0, 0, 0],
+        #     [0, 1,  0, 0],
+        #     [0,             0,              1, 0],
+        #     [0,             0,              0, 1]
+        # ])
+        
         # print("self.icp_initial_guess : ", self.icp_initial_guess)
 
     def publish_icp_result(self, lat, lon, heading):

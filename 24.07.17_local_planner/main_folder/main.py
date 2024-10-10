@@ -1,4 +1,4 @@
-import math, queue, socket, time, threading, serial, json, random, select, re, atexit, rospy
+import time, threading, rospy
 from Jetson_initalizing_values import initialize_variables
 from Jetson_serial_gnss import serial_gnss
 from Jetson_serial_nucleo import serial_nucleo
@@ -14,8 +14,7 @@ from goal_publish import NavigationController
 from datetime import datetime
 
 import copy
-from math import radians, cos, sin, asin, sqrt, atan2, degrees
-from nav_msgs.msg import Path
+from math import radians, cos, sin, asin, sqrt, atan2, degrees, pi
 
 import signal
 import sys
@@ -45,8 +44,9 @@ class boat:
             'velocity': None, 'heading': 0, 'forward_velocity': 0, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None, 
             "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0, 'COG' : None, 'rotational_velocity' : 0,
             "arrived" : False, "flag_autodrive" : False, 
-            "icp_localization" : False
+            "icp_localization" : False,
             # gnss end
+            "v_desired" : 0, "w_desired" : 0
             } # cf. com_status undefined
         
         initialize_variables(self)
@@ -278,6 +278,7 @@ class boat:
                     self.update_jetson_coeff,
                     # self.update_vff_coeff,
                     self.update_gnss_data,
+                    self.update_cmd_vel_desired
             ]
             prev_time_collect_data = time.time()
             while True:
@@ -305,10 +306,17 @@ class boat:
                 with open(file_path, 'a') as file:
                     file.write(f"{log_time} : {self.current_value}\n")
                     # print("done?")
-                time.sleep(0.2)
+                time.sleep(0.1)
                 
         except Exception as e:
             print("data collecting error : ", e)
+
+    def update_cmd_vel_desired(self):
+        try: 
+            self.current_value["v_desired"] = round(self.linear_x ,3)
+            self.current_value["w_desired"] = round(self.angular_z * 180/pi, 3)
+        except Exception as e:
+            print("(update cmd vel) : ", e)
 
     def update_vff_coeff(self):
         try:
@@ -320,7 +328,7 @@ class boat:
         try:
             (self.current_value["mode_chk"], self.current_value["pwml_chk"], self.current_value["pwmr_chk"])= self.serial_nucleo_cpy.nucleo_feedback_values
         except Exception as e:
-            pass
+            print("update nucleo error : ", e)
             
         try:
             self.current_value["com_status_recv"] = self.jetson_socket_pc.flag_pc_recv_alive
@@ -370,11 +378,14 @@ class boat:
     def update_gnss_data(self):
         with self.gnss_lock:
             if all(value is not None for value in self.serial_gnss_cpy.current_value.values()):
+                # print("gnss ready")
                 self.current_value.update(self.serial_gnss_cpy.current_value)
                 self.flag_icp_execute = False
                 self.cnt_gnss_signal_error = 0
                 self.serial_gnss_cpy.flag_localization = True
             else:
+                # print("icp ; ", self.serial_gnss_cpy.current_value.values())
+                
                 self.cnt_gnss_signal_error += 1
                 if self.cnt_gnss_signal_error >= 3:
                     # print("icp executing")
@@ -386,7 +397,7 @@ class boat:
                         self.current_value.update(self.icp_handler.current_value)
                     else:
                         # print("icp calculating delay")
-                        if self.cnt_gnss_signal_error >= 5:
+                        if self.cnt_gnss_signal_error >= 6:
                             self.serial_gnss_cpy.flag_localization = False
                             self.gnss_initial_value = {'latitude' : None, 'longitude' : None, 'velocity' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None, 'forward_velocity' : None}
                             self.current_value.update(self.gnss_initial_value)

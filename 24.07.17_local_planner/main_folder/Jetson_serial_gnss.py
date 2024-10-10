@@ -214,8 +214,8 @@ class serial_gnss:
             
     def _process_rot_data(self, tokens):
         try:
-            rotational_token = tokens[1]
-            self.current_value['rotational_velocity'] = round(float(rotational_token) / 60, 2) if rotational_token not in [None, ''] else None
+            rotational_token = tokens[1] #rot > deg/min
+            self.current_value['rotational_velocity'] = round(float(rotational_token) / 60, 2) if rotational_token not in [None, ''] else None 
                     
         except ValueError as e:
             print(f"Error processing gnrot data: {e}")
@@ -223,12 +223,13 @@ class serial_gnss:
 
     def _process_vgt_data(self, tokens):
         try:
-            cog_token = tokens[3]
+            cog_token = tokens[5]
+            # print('cog token : ', cog_token)
             self.current_value['COG'] = float(cog_token) if cog_token not in [None, ''] else None
             
-            cog = self.boat.current_value['COG']
-            heading = self.boat.current_value['heading']
-            velocity = self.boat.current_value['velocity']
+            cog = self.current_value['COG']
+            heading = self.current_value['heading']
+            velocity = self.current_value['velocity']
             if cog is not None and heading is not None and velocity is not None:
                 # 각도 차이 계산 (단위: degrees)
                 delta_theta = abs(cog - heading)
@@ -282,7 +283,7 @@ class serial_gnss:
             # filtered_lon = self.apply_low_pass_filter('longitude', new_lon)
             
             self.current_value['latitude'] = new_lat
-            self.current_value['latitude'] = new_lon
+            self.current_value['longitude'] = new_lon
             self.current_value['velocity'] = round(float(tokens[7]) * 0.51444, 2) if tokens[7] not in [None, ''] else None
         
             self.cnt_receive = 0

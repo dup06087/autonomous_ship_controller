@@ -84,8 +84,9 @@ warm_up_open3d_cuda()
 
 
 class IMUCorrector:
-    def __init__(self):
+    def __init__(self, ekf_instance):
         print("IMUCorrector Initialized")
+        self.ekf_instance = ekf_instance
         self.correction_pub = rospy.Publisher('/imu/corrected', Float64MultiArray, queue_size=10)
         rospy.Subscriber('/imu/data', Imu, self.imu_callback)
 
@@ -96,9 +97,9 @@ class IMUCorrector:
         self.dheading_step = 0
 
         # Velocity initialized to zero
-        self.vx = 0  # Velocity in x-direction
-        self.vy = 0  # Velocity in y-direction
-        self.prev_heading = 0  # Initialize previous heading
+        self.vx = self.ekf_instance.xEst[3, 0]  # Velocity in x-direction
+        self.vy = self.ekf_instance.xEst[4, 0]  # Velocity in y-direction
+        self.prev_heading = self.ekf_instance.xEst[2, 0]  # Initialize previous heading
         self.prev_time = None
 
     def quaternion_to_euler(self, x, y, z, w):
@@ -159,12 +160,13 @@ class IMUCorrector:
         # Heading update: z축 각속도(w_z)를 이용하여 헤딩 업데이트
         self.dheading_step = w_z * delta_time * 180 / math.pi  # 각속도를 각도로 변환
         self.dheading += self.dheading_step
-        current_heading = (self.prev_heading - self.dheading_step) % 360
+        
+        current_heading = (self.ekf_instance.xEst[2, 0] - self.dheading_step) % 360
         heading_rad = math.radians(current_heading)
 
         # 속도 업데이트: a * t로부터 속도 업데이트
-        self.vx += free_acc[0] * delta_time
-        self.vy += free_acc[1] * delta_time
+        self.vx = self.ekf_instance.xEst[3, 0] + free_acc[0] * delta_time
+        self.vy = self.ekf_instance.xEst[4, 0] + free_acc[1] * delta_time
 
         # 로컬 좌표계에서 전역 좌표계로 속도 변환
         global_v_north = self.vx * math.cos(heading_rad) - -self.vy * math.sin(heading_rad)
@@ -195,16 +197,18 @@ class IMUCorrector:
         self.vy = vy
 
 class ICPHandler:
-    def __init__(self, imu_corrector, experiment_folder):
+    def __init__(self, imu_corrector, ekf_instance, experiment_folder):
         self.imu_corrector = imu_corrector
+        self.ekf_instance = ekf_instance
         self.experiment_folder = experiment_folder
         self.icp_data_file = os.path.join(self.experiment_folder, "icp_log.txt")
         self.prev_scan = None
 
         # ICP global position (latitude, longitude, heading)
-        self.prev_latitude = initial_latitude
-        self.prev_longitude = initial_longitude
-        self.prev_heading = initial_heading
+        self.prev_latitude = self.ekf_instance.xEst[1, 0]
+        self.prev_longitude = self.ekf_instance.xEst[0, 0]
+        self.prev_heading = self.ekf_instance.xEst[2, 0]
+
 
         # ICP initial guess
         self.icp_initial_guess = np.eye(4)
@@ -235,6 +239,10 @@ class ICPHandler:
             if self.processed_time == None:
                 self.processed_time = current_time
                 return
+
+            self.prev_latitude = self.ekf_instance.xEst[1, 0]
+            self.prev_longitude = self.ekf_instance.xEst[0, 0]
+            self.prev_heading = self.ekf_instance.xEst[2, 0]
 
             self.dnorth = self.imu_corrector.dnorth
             self.deast = self.imu_corrector.deast
@@ -274,25 +282,40 @@ class ICPHandler:
 
                     # Update heading based on ICP result
                     icp_heading_change = np.degrees(rotation_euler[2])
+                    # current_heading = (self.prev_heading - icp_heading_change) % 360
                     current_heading = (self.prev_heading - icp_heading_change) % 360
+                    
+                    # # Calculate new global position based on ICP translation result
+                    # lat, lon, v_x, v_y = self.calculate_new_position(
+                    #     self.prev_latitude, self.prev_longitude,
+                    #     -translation[2], translation[0], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
+                    # )
 
                     # Calculate new global position based on ICP translation result
                     lat, lon, v_x, v_y = self.calculate_new_position(
                         self.prev_latitude, self.prev_longitude,
                         -translation[2], translation[0], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
                     )
-
+                    
+                    
                     # Update global position with ICP result
-                    self.prev_latitude = lat
-                    self.prev_longitude = lon
-                    self.prev_heading = current_heading
+                    # self.prev_latitude = lat
+                    # self.prev_longitude = lon
+                    # self.prev_heading = current_heading
                     self.imu_corrector.post_icp_reset(v_x, v_y)
                     self.prev_x_moved = translation[0]
                     self.prev_y_moved = translation[1]
                     self.prev_heading_changed = icp_heading_change
                     
+                        # heading 각도가 180도 이상이면 -360도 조정 (normalize)
+                    
+                    # local 좌표계 속도 -> global 좌표계 속도로 변환
+                    v_north = v_x * math.cos(self.prev_heading) - -v_y * math.sin(self.prev_heading)
+                    v_east = v_x * math.sin(self.prev_heading) + -v_y * math.cos(self.prev_heading)
+
+                    
                     # Publish updated ICP result
-                    self.publish_icp_result(lat, lon, current_heading)
+                    self.publish_icp_result(lat, lon, current_heading, v_east, v_north)
 
                     # Log the result to file
                     self.log_icp_result_to_file(lat, lon, current_heading, data.header.stamp)
@@ -333,7 +356,7 @@ class ICPHandler:
         v_x = delta_x / delta_time
         v_y = delta_y / delta_time
 
-        print(f"New Lat: {new_lat}, New Lon: {new_lon}, v_x: {v_x}, v_y: {v_y}, delta_time: {delta_time}")
+        # print(f"New Lat: {new_lat}, New Lon: {new_lon}, v_x: {v_x}, v_y: {v_y}, delta_time: {delta_time}")
         return new_lat, new_lon, v_x, v_y
     
     def apply_imu_to_icp_guess(self):
@@ -348,9 +371,9 @@ class ICPHandler:
         #이거는 dheading()
         heading_diff = np.radians(self.dheading)
         # heading_diff = np.radians(self.prev_heading_changed)
-        print("dheading : ", self.dheading)
-        print("dx dy : ", dx, dy)
-        print("prev x y : ", self.prev_x_moved, self.prev_y_moved)
+        # print("dheading : ", self.dheading)
+        # print("dx dy : ", dx, dy)
+        # print("prev x y : ", self.prev_x_moved, self.prev_y_moved)
         self.icp_initial_guess = np.array([
             [np.cos(heading_diff), -np.sin(heading_diff), 0, self.prev_x_moved],
             [np.sin(heading_diff), np.cos(heading_diff),  0, self.prev_y_moved],
@@ -359,9 +382,9 @@ class ICPHandler:
         ])
         # print("self.icp_initial_guess : ", self.icp_initial_guess)
 
-    def publish_icp_result(self, lat, lon, heading):
+    def publish_icp_result(self, lat, lon, heading, vx, vy):
         msg = Float64MultiArray()
-        msg.data = [lat, lon, heading]
+        msg.data = [lat, lon, heading, vx, vy]
         self.icp_result_pub.publish(msg)
 
     def log_icp_result_to_file(self, lat, lon, heading, stamp):
