@@ -186,6 +186,8 @@ class ICPHandler:
             # points_xyz = pc2.create_cloud_xyz32(header, points_cpu)
             # self.pub_check_trans.publish(points_xyz)
 
+            if not (self.main_instance.cnt_gnss_signal_error in [1,2,3]):
+                self.prev_scan = cloud
 
             if self.prev_scan is not None and self.main_instance.flag_icp_execute:
                 self.dheading = self.imu_corrector.dheading
@@ -215,7 +217,7 @@ class ICPHandler:
                     # Calculate new global position based on ICP translation result
                     lat, lon, v_x, v_y = self.calculate_new_position(
                         self.prev_latitude, self.prev_longitude,
-                        translation[0]*1.2, 0, self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
+                        translation[0]*1.1, 0, self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
                     )
                     lat = round(lat, 8)
                     lon = round(lon, 8)
@@ -241,7 +243,7 @@ class ICPHandler:
                     # Log the result to file
                     # self.log_icp_result_to_file(lat, lon, current_heading, data.header.stamp)
                     time_processed = (data.header.stamp - self.processed_time).to_sec()
-                    rotational_velocity = round((icp_heading_change)/time_processed, 3)# deg/s
+                    rotational_velocity = -round((icp_heading_change)/time_processed, 3)# deg/s #cw + same with gnss
                     velocity = round(math.sqrt(v_x**2+v_y**2), 3)
                     
                     
@@ -257,7 +259,6 @@ class ICPHandler:
 
                 # print("prev_scan none : ", rospy.Time.now())
             # Store the current scan for the next iteration
-            self.prev_scan = cloud
 
         except Exception as e:
             print(f"ICP error: {e}")

@@ -125,8 +125,8 @@ class PointCloudProcessor:
             pcd = self.voxel_down_sampling(pcd, voxel_size=self.voxel_size)
             pcd = self.rotate_point_cloud_by_pitch(pcd)
 
-            # ship_body_bounds = {'min': [-1.1, -1, -1], 'max': [1.1, 1, 0.5]}
-            ship_body_bounds = {'min': [-2, -2, -1], 'max': [2, 2, 0.5]}
+            ship_body_bounds = {'min': [-0.9, -0.7, -1], 'max': [0.9, 0.7, 0.5]}
+            # ship_body_bounds = {'min': [-2, -2, -1], 'max': [2, 2, 0.5]}
             pcd = self.remove_ship_body(pcd, ship_body_bounds)
 
             points_cpu = pcd.point.positions.to(o3c.Device("CPU:0")).numpy()

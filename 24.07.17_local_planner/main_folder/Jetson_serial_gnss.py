@@ -223,13 +223,16 @@ class serial_gnss:
 
     def _process_vgt_data(self, tokens):
         try:
-            cog_token = tokens[5]
+            cog_token = tokens[3]
             # print('cog token : ', cog_token)
-            self.current_value['COG'] = float(cog_token) if cog_token not in [None, ''] else None
-            
-            cog = self.current_value['COG']
             heading = self.current_value['heading']
             velocity = self.current_value['velocity']
+            
+            self.current_value['COG'] = float(cog_token) if cog_token not in [None, ''] else heading
+                
+            cog = self.current_value['COG']
+
+            
             if cog is not None and heading is not None and velocity is not None:
                 # 각도 차이 계산 (단위: degrees)
                 delta_theta = abs(cog - heading)

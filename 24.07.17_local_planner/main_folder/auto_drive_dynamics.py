@@ -246,29 +246,33 @@ def calculate_pwm_auto(self, forward_velocity, rotational_velocity, desired_forw
                        kv_p, kv_i, kv_d, kw_p, kw_i, kw_d, dt=0.2):
     try:
         
-        v_measured = forward_velocity
-        omega_measured = -rotational_velocity * math.pi / 180 # deg
+        v_current = forward_velocity
+        # omega_measured = -rotational_velocity * math.pi / 180 # deg
+        w_current = rotational_velocity # deg/s
+        
+        v_desired = desired_forward_velocity
+        w_desired = -desired_angular_velocity * 180/math.pi
         # omega_measured = -compute_angular_velocity(self) # deg
         # print("current v,w : ", v_measured, omega_measured) 
         # print("desired v,w(rad) : ", desired_forward_velocity, desired_angular_velocity) # rad
         
-        if desired_forward_velocity == 0 and desired_angular_velocity == 0:
+        if v_desired == 0 and w_desired == 0:
             self.current_value["pwml_auto"] = 1500
             self.current_value["pwmr_auto"] = 1500
             return
         
         v_control, self.prev_error_v, self.integral_v = compute_pid(
-            desired_forward_velocity, v_measured, dt, kv_p, kv_i, kv_d,
+            v_desired, v_current, dt, kv_p, kv_i, kv_d,
             self.prev_error_v, self.integral_v)
         omega_control, self.prev_error_omega, self.integral_omega = compute_pid(
-            desired_angular_velocity, omega_measured, dt, kw_p, kw_i, kw_d,
+            w_desired, w_current, dt, kw_p, kw_i, kw_d,
             self.prev_error_omega, self.integral_omega)
 
         b = 0.295  # 바퀴 사이 거리
         k_L = 0.2217  # 왼쪽 바퀴 계수
         k_R = 0.2217  # 오른쪽 바퀴 계수
         C_d = 30  # 원하는 속도 계수
-        C_tau = -0.8  # 원하는 각속도 계수
+        C_tau = +0.8  # 원하는 각속도 계수
         
         # if self.angular_z >=0:
         PWM_left = (b * C_d * v_control + C_tau * omega_control) / (2 * b * k_L) # sign is changed because of diffrence between rviz and heading + direction

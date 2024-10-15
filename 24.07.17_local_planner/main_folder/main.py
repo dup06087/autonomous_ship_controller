@@ -37,9 +37,10 @@ class boat:
             "voxel_size" : 0.05, "intensity" : 30, "dbscan_eps" : 0.1 , "dbscan_minpoints" : 5, "coeff_vff_repulsive_force" : 0,
             # pc get params
             'mode_chk': "SELF", 'pwml_chk': None, 'pwmr_chk': None, # nucleo get params
-            'pwml_auto': None, 'pwmr_auto': None, 'pwml_sim': None, 'pwmr_sim': None, 'cnt_destination' : 0, 'distance': None, 
-            "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving 
-            "waypoint_lat_m" : None, "waypoint_lon_m" : None,
+            'pwml_auto': None, 'pwmr_auto': None, 'cnt_destination' : 0, 'distance': None, 
+            # 'pwml_sim': None, 'pwmr_sim': None, 
+            # "waypoint_latitude" : None, "waypoint_longitude" : None, # auto drving 
+            # "waypoint_lat_m" : None, "waypoint_lon_m" : None,
             # gnss get params below
             'velocity': None, 'heading': 0, 'forward_velocity': 0, 'pitch': None, 'validity': None, 'time': None, 'IP': None, 'date': None, 
             "longitude": 127.077618, "latitude": 37.633173, "obstacle_cost" : 0, 'COG' : None, 'rotational_velocity' : 0,
@@ -314,7 +315,7 @@ class boat:
     def update_cmd_vel_desired(self):
         try: 
             self.current_value["v_desired"] = round(self.linear_x ,3)
-            self.current_value["w_desired"] = round(self.angular_z * 180/pi, 3)
+            self.current_value["w_desired"] = round(-self.angular_z * 180/pi, 3)
         except Exception as e:
             print("(update cmd vel) : ", e)
 

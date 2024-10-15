@@ -32,7 +32,7 @@ class VelocityPublisher:
                 odom.twist.twist = Twist()
                 
                 forward_velocity = self.mother_instance.current_value['forward_velocity']
-                angular_velocity = self.mother_instance.current_value['rotational_velocity'] # deg/s
+                angular_velocity = self.mother_instance.current_value['rotational_velocity'] # deg/s # cw +
 
                 if forward_velocity is None or angular_velocity is None:
                     odom.twist.twist.linear.x = 0

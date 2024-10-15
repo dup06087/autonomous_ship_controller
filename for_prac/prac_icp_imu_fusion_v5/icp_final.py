@@ -375,10 +375,12 @@ class ICPHandler:
                     icp_heading_change = np.degrees(rotation_euler[2])
                     current_heading = (self.prev_heading - icp_heading_change) % 360
 
+                    self.calculate_matrix(transf)
+                    
                     #Calculate new global position based on ICP translation result
                     lat, lon, v_x, v_y = self.calculate_new_position(
                         self.prev_latitude, self.prev_longitude,
-                        translation[0]*1.2, 0, self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
+                        translation[0], translation[1], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
                     )
                     
                     # Update global position with ICP result
@@ -388,7 +390,7 @@ class ICPHandler:
                     self.imu_corrector.post_icp_reset(v_x, v_y)
                     print("calculated velocity : ", v_x, v_y)
                     self.prev_x_moved = translation[0]
-                    self.prev_y_moved = -translation[1]
+                    self.prev_y_moved = translation[1]
                     self.prev_heading_changed = icp_heading_change
                     
                     # Publish updated ICP result
@@ -404,8 +406,6 @@ class ICPHandler:
 
         except Exception as e:
             print(f"ICP error: {e}")
-
-
         
     def calculate_new_position(self, lat, lon, delta_x, delta_y, heading, delta_time):
         """Convert local ICP dx, dy to latitude and longitude updates, and calculate velocities."""
@@ -459,7 +459,7 @@ class ICPHandler:
         ])
         
         self.icp_initial_guess = np.array([
-            [np.cos(heading_diff), -np.sin(heading_diff), 0, dx+1],
+            [np.cos(heading_diff), -np.sin(heading_diff), 0, dx],
             [np.sin(heading_diff), np.cos(heading_diff),  0, dy],
             [0,             0,              1, 0],
             [0,             0,              0, 1]
