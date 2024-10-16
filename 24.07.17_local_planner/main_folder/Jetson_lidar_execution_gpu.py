@@ -69,8 +69,10 @@ class PointCloudProcessor:
         return pcd.voxel_down_sample(voxel_size)
 
     def rotate_point_cloud_by_pitch(self, pcd):
+        # + pitch에서 point들이 밑으로 이동함
         if self.pitch is None:
             return pcd
+        self.pitch -= 0.5 # calibration
         
         pitch_rad = np.radians(-self.pitch)
         R = np.array([[np.cos(pitch_rad), 0, -np.sin(pitch_rad)],

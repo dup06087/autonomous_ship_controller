@@ -186,8 +186,6 @@ class ICPHandler:
             # points_xyz = pc2.create_cloud_xyz32(header, points_cpu)
             # self.pub_check_trans.publish(points_xyz)
 
-            if not (self.main_instance.cnt_gnss_signal_error in [1,2,3]):
-                self.prev_scan = cloud
 
             if self.prev_scan is not None and self.main_instance.flag_icp_execute:
                 self.dheading = self.imu_corrector.dheading
@@ -259,6 +257,9 @@ class ICPHandler:
 
                 # print("prev_scan none : ", rospy.Time.now())
             # Store the current scan for the next iteration
+            
+            if not (self.main_instance.cnt_gnss_signal_error in [1,2,3]):
+                self.prev_scan = cloud
 
         except Exception as e:
             print(f"ICP error: {e}")

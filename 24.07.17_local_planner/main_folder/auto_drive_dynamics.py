@@ -140,7 +140,7 @@ def auto_drive(self):
                         # print("error 5 : ", e)
                         
                     ''' self.distance_to_target 값 none 아닌지 확인하는 코드 추가'''
-                    if float(self.distance_to_target) <= 2:
+                    if float(self.distance_to_target) <= 2 and self.current_value['distance'] != None:
                         # print("where is the prob2")
                         
                         self.cnt_destination += 1
