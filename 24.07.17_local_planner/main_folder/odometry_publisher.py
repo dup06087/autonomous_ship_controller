@@ -38,10 +38,10 @@ class VelocityPublisher:
                     odom.twist.twist.linear.x = 0
                     odom.twist.twist.angular.z = 0
                 else:        
-                    odom.twist.twist.linear.x = forward_velocity
-                    odom.twist.twist.angular.z = -angular_velocity * math.pi/180
-                    # odom.twist.twist.linear.x = self.mother_instance.linear_x
-                    # odom.twist.twist.angular.z = self.mother_instance.angular_z
+                    # odom.twist.twist.linear.x = forward_velocity
+                    # odom.twist.twist.angular.z = -angular_velocity * math.pi/180
+                    odom.twist.twist.linear.x = self.mother_instance.linear_x
+                    odom.twist.twist.angular.z = self.mother_instance.angular_z
 
                 self.pub.publish(odom)
                 # print("(odom) current values : ", odom.twist.twist.linear.x, odom.twist.twist.angular.z)
