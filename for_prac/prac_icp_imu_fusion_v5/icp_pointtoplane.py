@@ -301,6 +301,15 @@ class ICPHandler:
             [0,             0,              1, 0],
             [0,             0,              0, 1]
         ])
+        
+        self.icp_initial_guess = np.array([
+            [np.cos(heading_diff), -np.sin(heading_diff), 0, 1],
+            [np.sin(heading_diff), np.cos(heading_diff),  0, 0],
+            [0,             0,              1, 0],
+            [0,             0,              0, 1]
+        ])
+
+
 
     def publish_icp_result(self, lat, lon, heading):
         msg = Float64MultiArray()

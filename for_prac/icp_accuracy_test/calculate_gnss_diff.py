@@ -16,6 +16,17 @@ def compute_gps_displacement(lat1, lon1, lat2, lon2):
     distance = EARTH_RADIUS * c  # Distance in meters
     return distance
 
+# Function to compute bearing between two GPS points
+def compute_bearing(lat1, lon1, lat2, lon2):
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+
+    dlon = lon2 - lon1
+    x = sin(dlon) * cos(lat2)
+    y = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon)
+    bearing = atan2(x, y)
+    
+    return degrees(bearing) % 360  # Normalize to 0-360 degrees
+
 # Function to convert displacement to local x, y coordinates using initial heading
 def convert_to_local_coordinates(distance, bearing, initial_heading):
     # Convert bearing and heading to radians
@@ -62,16 +73,20 @@ def main(pcd_file1, pcd_file2, gnss_file):
     # Compute GPS displacement (distance)
     gps_distance = compute_gps_displacement(lat1, lon1, lat2, lon2)
 
+    # Calculate the bearing between the two points
+    bearing = compute_bearing(lat1, lon1, lat2, lon2)
+
     # Calculate heading change
     heading_change = heading2 - heading1
 
     # Convert GPS displacement into local coordinates based on the initial heading
-    delta_x, delta_y = convert_to_local_coordinates(gps_distance, heading1, heading1)  # Using heading1 for reference
+    delta_x, delta_y = convert_to_local_coordinates(gps_distance, bearing, heading1)
 
     # Output the results
     print(f"Point 1 (lat, lon, heading): ({lat1}, {lon1}, {heading1})")
     print(f"Point 2 (lat, lon, heading): ({lat2}, {lon2}, {heading2})")
     print(f"GPS Displacement: {gps_distance:.2f} meters")
+    print(f"Bearing from Point 1 to Point 2: {bearing:.2f} degrees")
     print(f"Heading Change: {heading_change:.2f} degrees")
     print(f"Local Displacement: x = {delta_x:.2f} meters, y = {delta_y:.2f} meters (relative to initial heading)")
 

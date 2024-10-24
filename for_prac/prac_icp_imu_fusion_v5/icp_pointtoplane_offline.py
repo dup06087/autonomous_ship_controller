@@ -203,8 +203,13 @@ class ICPHandler:
                     target=self.prev_scan,
                     max_correspondence_distance=1.5,
                     init_source_to_target=self.icp_initial_guess,
-                    estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPlane(),
-                    criteria=o3d.t.pipelines.registration.ICPConvergenceCriteria(max_iteration=30)
+                    estimation_method=o3d.t.pipelines.registration.TransformationEstimationPointToPlane(),                    
+                    criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(
+                        relative_fitness=1e-10,
+                        relative_rmse=1e-10,
+                        max_iteration=50
+                    ),
+                                        
                 )
 
                 if reg_gicp.fitness > 0.2:
@@ -269,7 +274,12 @@ class ICPHandler:
             [0,             0,              1, 0],
             [0,             0,              0, 1]
         ])
-
+        self.icp_initial_guess = np.array([
+            [np.cos(heading_diff), -np.sin(heading_diff), 0, 1],
+            [np.sin(heading_diff), np.cos(heading_diff),  0, 0],
+            [0,             0,              1, 0],
+            [0,             0,              0, 1]
+        ])
     def log_icp_result_to_file(self, lat, lon, heading, stamp, translation):
         sec = stamp.to_sec()
         formatted_time = datetime.datetime.fromtimestamp(sec).strftime("%H:%M:%S")
