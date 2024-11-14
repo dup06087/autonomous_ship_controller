@@ -65,11 +65,11 @@ class serial_nucleo:
             try:
                 cycle_start_time = time.time()  # 사이클 시작 시간 기록
 
-                time.sleep(0.05)
+                time.sleep(0.01)
                 lines = []
                 if self.serial_port.in_waiting:
                     line = self.serial_port.readline()  # timeout X > empty '' return
-                    # print("line : ", line)
+                    print("line : ", line)
                     if line:
                         lines.append(line)
 
@@ -90,7 +90,7 @@ class serial_nucleo:
             try:
                 processing_start_time = time.time()  # 처리 시작 시간 기록
 
-                time.sleep(0.05)  # 주기적으로 큐를 확인
+                time.sleep(0.01)  # 주기적으로 큐를 확인
                 data = self.get_from_queue()
                 if data:
                     self.nucleo_feedback_values = self.process_received_data(data)
@@ -130,25 +130,26 @@ class serial_nucleo:
         return nucleo_values
     
     def data_transmission_part(self):
+        last_transmission_time = time.time()  # 마지막 송신 시간 초기화
+
         while self.running:
             try:
-                transmission_start_time = time.time()  # 송신 시작 시간 기록
+                current_time = time.time()
+                # 마지막 송신 이후 0.2초가 지났는지 확인
+                if current_time - last_transmission_time >= 0.2:
+                    with self.lock_send:
+                        if not self.transmit_queue.empty():
+                            data = self.transmit_queue.get()
+                            if data:
+                                self.nucleo_sended_data = self.prepare_data_for_transmission(data)
+                                self.serial_port.write(self.nucleo_sended_data)
+                                self.flag_nucleo_alive["send"] = True
 
-                time.sleep(0.2)  # 필요한 경우 조정
+                    # 송신 종료 후, 마지막 송신 시간을 현재 시간으로 업데이트
+                    last_transmission_time = time.time()
 
-                with self.lock_send:
-                    if not self.transmit_queue.empty():
-                        data = self.transmit_queue.get()
-                        # print("transmit data queue : ", data)
-                        if data:
-                            self.nucleo_sended_data = self.prepare_data_for_transmission(data)
-                            self.serial_port.write(self.nucleo_sended_data)
-                            self.flag_nucleo_alive["send"] = True
-
-                transmission_end_time = time.time()  # 송신 종료 시간 기록
-                transmission_time = transmission_end_time - transmission_start_time  # 송신 시간 계산
-
-                # print("Transmission cycle time: {:.3f} seconds".format(transmission_time))
+                # 0.01초 동안 대기하여 루프가 너무 빠르게 도는 것을 방지
+                time.sleep(0.01)
 
             except Exception as e:
                 print(f"Error while transmitting data: {e}")
@@ -172,15 +173,23 @@ class serial_nucleo:
 
     
     def run(self, sending_data):
-        while self.running:
-            time.sleep(0.2)
-            try:
-                # print("sending : ", sending_data)
+        last_send_time = time.time()  # 마지막 송신 시간 초기화
 
-                self.send_data(sending_data)
-            except Exception as e:
-                print(f"Nucleo communication error: {e}")
-                # time.sleep(0.2)
+        while self.running:
+            current_time = time.time()
+            # 마지막 송신 이후 0.2초가 지났는지 확인
+            if current_time - last_send_time >= 0.2:
+                try:
+                    # 데이터 전송
+                    self.send_data(sending_data)
+                    # 송신 후, 마지막 송신 시간을 현재 시간으로 업데이트
+                    last_send_time = time.time()
+                except Exception as e:
+                    print(f"Nucleo communication error: {e}")
+
+            # 0.01초 동안 대기하여 루프가 너무 빠르게 도는 것을 방지
+            time.sleep(0.01)
+
 
 
     def send_data(self, data):

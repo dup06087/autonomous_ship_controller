@@ -22,12 +22,26 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 
 
-# 초기값 설정
+# rect
 initial_latitude_raw = 3737.7326613
 initial_latitude_direction = 'N'
 initial_longitude_raw = 12704.7064656
 initial_longitude_direction = 'E'
 initial_heading = 8.955
+
+# lane_direction
+# initial_latitude_raw = 3737.7302554
+# initial_latitude_direction = 'N'
+# initial_longitude_raw = 12704.7049263
+# initial_longitude_direction = 'E'
+# initial_heading = 8.133
+
+# round
+# initial_latitude_raw = 3737.7327122
+# initial_latitude_direction = 'N'
+# initial_longitude_raw = 12704.7064321
+# initial_longitude_direction = 'E'
+# initial_heading = 9.532
 
 # 위경도 변환 함수
 def convert_to_degrees(value):
@@ -148,9 +162,9 @@ class ICPHandler:
         self.dheading = self.imu_corrector.dheading
 
         cloud = self.point_cloud2_to_o3d(data)
-        ship_body_bounds = {'min': [-2, -2, -5], 'max': [2, 2, 5]}
-        cloud = self.remove_ship_body(cloud, ship_body_bounds)
-        cloud = self.compute_normals(cloud)
+        # ship_body_bounds = {'min': [-2, -2, -5], 'max': [2, 2, 5]}
+        # cloud = self.remove_ship_body(cloud, ship_body_bounds)
+        # cloud = self.compute_normals(cloud)
 
         if self.prev_scan is not None:
             self.apply_imu_to_icp_guess()
@@ -158,15 +172,15 @@ class ICPHandler:
 
             # Perform Generalized ICP registration for high accuracy
             criteria = o3d.pipelines.registration.ICPConvergenceCriteria(
-                max_iteration=200,  # Set higher iteration for more accuracy
-                relative_fitness=1e-6,  
-                relative_rmse=1e-6
+                max_iteration=100,  # Set higher iteration for more accuracy
+                relative_fitness=1e-20,  
+                relative_rmse=1e-20
             )
 
             reg_gicp = o3d.pipelines.registration.registration_generalized_icp(
                 cloud.to_legacy(),
                 self.prev_scan.to_legacy(),
-                max_correspondence_distance=1.5,
+                max_correspondence_distance=3,
                 init=self.icp_initial_guess,
                 estimation_method=o3d.pipelines.registration.TransformationEstimationForGeneralizedICP(),
                 criteria=criteria
@@ -292,5 +306,6 @@ if __name__ == "__main__":
     imu_corrector = IMUCorrector()
     icp_handler = ICPHandler(imu_corrector, experiment_folder)
     bag_file = '../../../../rosbag_for_fusion/rect1.bag'  # 실제 rosbag 파일 경로 설정
+    # bag_file = '../../../../rosbag_for_fusion/round1.bag'  # 실제 rosbag 파일 경로 설정
     process_bag(bag_file, imu_corrector, icp_handler)
     print("Finished processing bag file.")

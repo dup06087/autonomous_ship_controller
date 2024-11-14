@@ -60,9 +60,9 @@ def convert_pointcloud2_to_open3d(ros_point_cloud):
     return o3d_cloud
 
 # Define paths
-bag_file_path = '/home/ices/Desktop/rosbag_for_fusion/rect1.bag'
-filtered_timestamps_file = './filtered_closest_timestamps.txt'
-output_dir = './extracted_pointclouds'
+bag_file_path = '/home/ices/Desktop/rosbag_for_fusion/round1.bag'
+filtered_timestamps_file = './filtered_closest_timestamps_round1.txt'
+output_dir = './extracted_pointclouds_round1'
     
 # Ensure output directory exists
 if not os.path.exists(output_dir):

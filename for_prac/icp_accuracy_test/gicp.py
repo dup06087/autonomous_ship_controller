@@ -1,4 +1,6 @@
 import open3d as o3d
+import open3d.core as o3c
+
 import numpy as np
 from math import radians, cos, sin, atan2, degrees
 
@@ -34,6 +36,34 @@ def apply_gicp_legacy(source, target, icp_initial_guess=np.eye(4), distance_thre
         )
     )
     return reg_gicp
+
+# Function to apply Generalized ICP using Tensor-based (GPU-capable) API
+def apply_gicp_tensor(source, target, icp_initial_guess=np.eye(4), distance_threshold=1.5):
+    # Convert source and target point clouds to Tensor-based point clouds
+    source_t = o3d.t.geometry.PointCloud.from_legacy(source)
+    target_t = o3d.t.geometry.PointCloud.from_legacy(target)
+    
+    # Set ICP convergence criteria
+    criteria = o3d.t.pipelines.registration.ICPConvergenceCriteria(
+        relative_fitness=1e-6,
+        relative_rmse=1e-6,
+        max_iteration=1000
+    )
+    
+    # Convert initial guess to Tensor
+    icp_initial_guess_t = o3c.Tensor(icp_initial_guess, dtype=o3c.Dtype.Float32)
+
+    # Perform Generalized ICP using TransformationEstimationForGeneralizedICP
+    result = o3d.t.pipelines.registration.icp(
+        source=source_t,
+        target=target_t,
+        max_correspondence_distance=distance_threshold,
+        init=icp_initial_guess_t,
+        estimation_method=o3d.t.pipelines.registration.TransformationEstimationForGeneralizedICP(),
+        criteria=criteria
+    )
+    
+    return result
 
 # Load the point cloud from the file
 def load_point_cloud(pcd_file):
@@ -98,6 +128,7 @@ def main(pcd_file1, pcd_file2, min_height=0):
     ])
     
     # Perform Generalized ICP registration
+    # reg_gicp = apply_gicp_legacy(source_cropped, target_cropped, icp_initial_guess)
     reg_gicp = apply_gicp_legacy(source_cropped, target_cropped, icp_initial_guess)
     transformation = reg_gicp.transformation
     print(transformation)

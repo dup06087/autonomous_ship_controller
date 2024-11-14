@@ -270,45 +270,50 @@ class boat:
             # print("error init cmd_vel to 0")
             
     def collect_data(self):
-        try:    
-            # print("collecting")
-            '''add obstacle related coordiante etc...'''
-            tasks = [self.update_seperate_data, 
-                    self.update_pc_command,
-                    self.update_pc_coeff,
-                    self.update_jetson_coeff,
-                    # self.update_vff_coeff,
-                    self.update_gnss_data,
-                    self.update_cmd_vel_desired
+        try:
+            tasks = [
+                self.update_seperate_data, 
+                self.update_pc_command,
+                self.update_pc_coeff,
+                self.update_jetson_coeff,
+                # self.update_vff_coeff,
+                self.update_gnss_data,
+                self.update_cmd_vel_desired
             ]
+
             prev_time_collect_data = time.time()
+            last_collect_time = time.time()  # 마지막 데이터 수집 시간 초기화
+
             while True:
-                self.prev_value = copy.deepcopy(self.current_value)
-                
+                # 현재 시간 가져오기
+                current_time = time.time()
 
-                for idx, task in enumerate(tasks):
-                    try:
-                        task()
-                        
-                    except Exception as e:
-                        if time.time() - prev_time_collect_data >=1:
-                            prev_time_collect_data = time.time()
-                            print("{}th collect data error : {}".format(idx, e))
-                        # pass
-      
-                # print("collected current value : ", self.current_value)
-                
-                ''' current value logger '''
-                # print('log_current value doing??')
-                current_time = datetime.now()
-                log_time = current_time.strftime("%m-%d %H:%M:%S") + '.' + str(current_time.microsecond // 100000)
-                file_path = os.path.join(self.log_folder_path, "log_current_value.txt")
+                # 0.1초마다 데이터 수집 수행
+                if current_time - last_collect_time >= 0.1:
+                    self.prev_value = copy.deepcopy(self.current_value)
 
-                with open(file_path, 'a') as file:
-                    file.write(f"{log_time} : {self.current_value}\n")
-                    # print("done?")
-                time.sleep(0.1)
-                
+                    for idx, task in enumerate(tasks):
+                        try:
+                            task()
+                        except Exception as e:
+                            # 1초마다 오류 메시지 출력
+                            if current_time - prev_time_collect_data >= 1:
+                                prev_time_collect_data = current_time
+                                print(f"{idx}th collect data error : {e}")
+
+                    # 로그 파일에 데이터 저장
+                    timestamp = datetime.now().strftime("%m-%d %H:%M:%S") + '.' + str(datetime.now().microsecond // 100000)
+                    file_path = os.path.join(self.log_folder_path, "log_current_value.txt")
+                    
+                    with open(file_path, 'a') as file:
+                        file.write(f"{timestamp} : {self.current_value}\n")
+
+                    # 마지막 수집 시간 업데이트
+                    last_collect_time = current_time
+
+                # 0.01초 동안 대기하여 루프가 너무 빠르게 도는 것을 방지
+                time.sleep(0.01)
+
         except Exception as e:
             print("data collecting error : ", e)
 

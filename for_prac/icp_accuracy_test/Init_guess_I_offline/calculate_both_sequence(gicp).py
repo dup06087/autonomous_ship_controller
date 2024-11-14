@@ -83,7 +83,8 @@ def load_point_cloud(pcd_file):
 def extract_transformation_details(transformation):
     delta_x = -transformation[0, 3]
     delta_y = transformation[1, 3]
-    yaw_change = degrees(atan2(transformation[1, 0], transformation[0, 0]))
+    yaw_change = -transformation[2,3]
+    # yaw_change = degrees(atan2(transformation[1, 0], transformation[0, 0]))
     icp_distance = hypot(delta_x, delta_y)
     return delta_x, delta_y, yaw_change, icp_distance
 
@@ -105,7 +106,18 @@ def process_sequence_with_gnss_and_gicp(folder_path, gnss_file):
         target = load_point_cloud(pcd_file2)
 
         icp_initial_guess = np.eye(4)
-
+        
+        icp_initial_guess = np.eye(4)
+        
+        rotation_matrix = np.array([
+            [cos(np.radians(0.1)), -sin(np.radians(0.1)), 0],
+            [sin(np.radians(0.1)),  cos(np.radians(0.1)), 0],
+            [0,               0,              1]
+        ])
+                
+        icp_initial_guess[0:2, 0:2] = rotation_matrix[0:2, 0:2]  # Apply rotational part
+        
+        
         # Start time measurement for ICP
         start_time = time.time()
 
@@ -141,7 +153,7 @@ def process_sequence_with_gnss_and_gicp(folder_path, gnss_file):
         print(result)
     
     # Save the results to a file in the required format
-    save_results_to_txt(results, output_file="icp_gnss_results_gicp.txt")
+    save_results_to_txt(results, output_file="icp_gnss_results_gicp_round1_angle_0.1.txt")
 
 # Main function to calculate the GPS displacement based on point cloud filenames
 def main_gnss(pcd_file1, pcd_file2, gnss_file):
@@ -172,12 +184,12 @@ def extract_time_from_filename(filename):
     return float(time_str)
 
 # Function to save results to a txt file
-def save_results_to_txt(results, output_file="icp_gnss_results_gicp.txt"):
+def save_results_to_txt(results, output_file="icp_gnss_results_gicp_round1.txt"):
     with open(output_file, 'w') as f:
         for result in results:
             f.write(json.dumps(result) + "\n")
 
 if __name__ == "__main__":
-    folder_path = "./extracted_pointclouds"
-    gnss_file = "./matched_gps_data.txt"    
+    folder_path = "./extracted_pointclouds_round1"
+    gnss_file = "./matched_gps_data_round1.txt"    
     process_sequence_with_gnss_and_gicp(folder_path, gnss_file)
