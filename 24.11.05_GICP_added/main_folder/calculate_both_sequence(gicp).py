@@ -178,7 +178,7 @@ def process_sequence_with_gnss_and_gicp(folder_path, gnss_file):
         print(result)
     
     # Save the results to a file in the required format
-    save_results_to_txt(results, output_file="icp_gnss_results_gicp_lane_direction_time_added.txt")
+    save_results_to_txt(results, output_file="icp_gnss_results_gicp_lake_one_cycle.txt")
 
 
 
@@ -211,12 +211,12 @@ def extract_time_from_filename(filename):
     return float(time_str)
 
 # Function to save results to a txt file
-def save_results_to_txt(results, output_file="icp_gnss_results_gicp_lane_direction.txt"):
+def save_results_to_txt(results, output_file="icp_gnss_results_gicp_lake_one_cycle.txt"):
     with open(output_file, 'w') as f:
         for result in results:
             f.write(json.dumps(result) + "\n")
 
 if __name__ == "__main__":
-    folder_path = "./extracted_pointclouds_lane_direction"
-    gnss_file = "./matched_gps_data_lane_direction.txt"    
+    folder_path = "./extracted_pointclouds_lake_one_cycle"
+    gnss_file = "./matched_gps_data.txt"    
     process_sequence_with_gnss_and_gicp(folder_path, gnss_file)

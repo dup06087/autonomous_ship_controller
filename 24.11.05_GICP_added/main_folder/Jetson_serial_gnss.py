@@ -18,8 +18,7 @@ class serial_gnss:
         self.receive_queue = Queue()
         self.running = True
 
-        self.current_value = {'validity' : None, 'latitude' : None, 'longitude' : None, 'velocity' : None, 'date' :  None, 'time' : None, 'heading' : None, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None, 'forward_velocity' : None}
-
+        self.current_value = {'validity' : None, 'latitude' : 37.633173, 'longitude' : 127.077618, 'velocity' : None, 'date' :  None, 'time' : None, 'heading' : 0, 'pitch' : None, 'rotational_velocity' : None, 'COG' : None, 'forward_velocity' : None}
         # self.sender_to_lidar = Jetson_gps_send_to_gnss.UdpBroadcaster(10110)
 
         self.flag_localization = True

@@ -16,7 +16,7 @@ class IMUCorrector:
     def __init__(self, main_instance):
         print("IMUCorrector Initialized")
         self.boat = main_instance
-        rospy.Subscriber('/imu/data', Imu, self.imu_callback)
+        rospy.Subscriber('/imu/data_raw', Imu, self.imu_callback)
 
         # IMU deltas (relative to last ICP result)
         self.dheading = 0  # Heading delta
@@ -83,8 +83,8 @@ class ICPHandler:
         # ICP initial guess
         self.icp_initial_guess = np.eye(4)
         # self.icp_result_pub = rospy.Publisher('/icp_result', Float64MultiArray, queue_size=1)
-        # self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=1)
-        self.sub_lidar = rospy.Subscriber('/processed_pointcloud', PointCloud2, self.lidar_callback, queue_size=1)
+        self.sub_lidar = rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback, queue_size=1)
+        # self.sub_lidar = rospy.Subscriber('/processed_pointcloud', PointCloud2, self.lidar_callback, queue_size=1)
         # self.pub_check_trans = rospy.Publisher("/transformed_pointcloud", PointCloud2, queue_size=1)
 
         # self.log_file = open(self.icp_data_file, "a")
@@ -109,7 +109,6 @@ class ICPHandler:
         
         # self.warm_up_open3d_cuda()
         
-
     def warm_up_open3d_cuda(self):
         print("Warming up CUDA using Open3D-Core...")
 
@@ -135,6 +134,7 @@ class ICPHandler:
     def update_main_instance(self, event):
         """5Hz로 main_instance의 current_value 값을 업데이트"""
         if self.main_instance.current_value is not None:
+
             latitude = self.main_instance.current_value.get('latitude')
             longitude = self.main_instance.current_value.get('longitude')
             heading = self.main_instance.current_value.get('heading')
@@ -172,10 +172,13 @@ class ICPHandler:
                 return
 
             # Convert PointCloud2 message to Open3D format
-            cloud = self.point_cloud2_to_o3d(data)
-            # cloud = self.crop_roi(cloud, start=[-10, -10, -0.2], end=[10, 10, 0.2])
+            cloud_array = self.convert_ros_to_numpy(data)
+            cloud_array = self.crop_roi(cloud_array, start=[-25, -25, -5], end=[25, 25, 5])
 
-            # cloud = self.downsample(cloud)
+            cloud_array = self.downsample(cloud_array)
+
+            cloud = o3d.geometry.PointCloud()
+            cloud.points = o3d.utility.Vector3dVector(cloud_array)
 
             # # cloud = self.translate_pointcloud(cloud, distance=-0.5)  # 0.5m를 예시로 적용
 
@@ -216,6 +219,7 @@ class ICPHandler:
                         o3d.pipelines.registration.TransformationEstimationForGeneralizedICP(),
                         o3d.pipelines.registration.ICPConvergenceCriteria(relative_fitness=1e-12, relative_rmse=1e-12, max_iteration=10)
                     )
+                    # print("gicp done")
                 except Exception as e:
                     print("ICP ERROR : ", e)
                     return
@@ -240,7 +244,7 @@ class ICPHandler:
                     # Calculate new global position based on ICP translation result
                     lat, lon, v_x, v_y = self.calculate_new_position(
                         self.prev_latitude, self.prev_longitude,
-                        translation[0]*1.1, translation[1], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
+                        translation[0], translation[1], self.prev_heading, (data.header.stamp - self.processed_time).to_sec()
                     )
                     lat = round(lat, 8)
                     lon = round(lon, 8)
@@ -281,7 +285,8 @@ class ICPHandler:
                 # print("prev_scan none : ", rospy.Time.now())
             # Store the current scan for the next iteration
             
-            if not (self.main_instance.cnt_gnss_signal_error in [1,2,3]):
+            # if not (self.main_instance.cnt_gnss_signal_error in [1,2,3]):
+            if not (self.main_instance.cnt_gnss_signal_error in [1]):
                 self.prev_scan = cloud
 
         except Exception as e:
@@ -403,8 +408,63 @@ class ICPHandler:
         cloud.points = o3d.utility.Vector3dVector(cloud_array)
         return cloud
     
+    def convert_ros_to_numpy(self, msg):
+        # PointCloud2 메시지를 numpy 배열로 직접 변환
+        point_generator = pc2.read_points(msg, field_names=("x", "y", "z", "intensity"), skip_nans=True)
+        points_array = np.fromiter(
+            point_generator,
+            dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4'), ('intensity', 'f4')]
+        )
+
+        # 구조화 배열을 일반 numpy 배열로 변환
+        points = np.zeros((points_array.shape[0], 4), dtype=np.float32)
+        points[:, 0] = points_array['x']
+        points[:, 1] = points_array['y']
+        points[:, 2] = points_array['z']
+        points[:, 3] = points_array['intensity']
+        return points
+
     def downsample(self, cloud, voxel_size=0.1):
         return cloud.voxel_down_sample(voxel_size)
+    
+    
+    def convert_ros_to_numpy(self, data):
+        """
+        Convert ROS PointCloud2 message to numpy array without using a list.
+        """
+        # PointCloud2 메시지의 generator를 numpy 배열로 변환
+        point_generator = pc2.read_points(data, field_names=("x", "y", "z"), skip_nans=True)
+        points = np.fromiter(point_generator, dtype=[('x', 'f4'), ('y', 'f4'), ('z', 'f4')])
+        
+        # 구조화된 배열을 일반 배열로 변환
+        return np.vstack((points['x'], points['y'], points['z'])).T
+
+    def crop_roi(self, points, start, end):
+        """
+        Crop ROI using Open3D legacy API.
+        """
+        # Convert numpy array to Open3D PointCloud
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+        # Define AxisAlignedBoundingBox
+        roi_bounding_box = o3d.geometry.AxisAlignedBoundingBox(min_bound=start, max_bound=end)
+
+        # Crop and return numpy array
+        cropped_pcd = pcd.crop(roi_bounding_box)
+        return np.asarray(cropped_pcd.points)
+
+    def downsample(self, points, voxel_size=0.5):
+        """
+        Downsample PointCloud using voxel size.
+        """
+        # Convert numpy array to Open3D PointCloud
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+        # Downsample and return numpy array
+        downsampled_pcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+        return np.asarray(downsampled_pcd.points)
     
     def translate_pointcloud(self, cloud, distance):
         """

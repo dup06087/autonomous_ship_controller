@@ -60,9 +60,9 @@ def convert_pointcloud2_to_open3d(ros_point_cloud):
     return o3d_cloud
 
 # Define paths
-bag_file_path = '/home/ices/Desktop/rosbag_for_fusion/lane_direction.bag'
-filtered_timestamps_file = './filtered_closest_timestamps_lane_direction.txt'
-output_dir = './extracted_pointclouds_lane_direction'
+bag_file_path = './pc_data_2024_11_20_1047.bag'
+filtered_timestamps_file = './filtered_closest_timestamps_lake_one_cycle.txt'
+output_dir = './extracted_pointclouds_lake_one_cycle'
     
 # Ensure output directory exists
 if not os.path.exists(output_dir):

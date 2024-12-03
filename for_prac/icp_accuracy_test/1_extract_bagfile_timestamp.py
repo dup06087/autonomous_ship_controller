@@ -1,7 +1,7 @@
 import rosbag
 
 # Path to your ROS bag file
-bag_file_path = '/home/ices/Desktop/rosbag_for_fusion/round1.bag'
+bag_file_path = '/home/ices/Desktop/rosbag_for_fusion/lane_direction.bag'
 
 # Topic to extract timestamps from
 topic_name = '/velodyne_points'  # Assuming this is the topic for the point cloud data
@@ -24,7 +24,7 @@ def save_timestamps_to_txt(timestamps, output_file):
 timestamps = extract_timestamps_from_bag(bag_file_path, topic_name)
 
 # Save timestamps to a text file
-output_file = './round1_timestamp.txt'
+output_file = './lane_direction_timestamp.txt'
 save_timestamps_to_txt(timestamps, output_file)
 
 print(f"Timestamps saved to {output_file}")

@@ -6,3 +6,4 @@ log_global_planner
 log_local_planner
 *.ply
 close_serial.txt
+*.pcd

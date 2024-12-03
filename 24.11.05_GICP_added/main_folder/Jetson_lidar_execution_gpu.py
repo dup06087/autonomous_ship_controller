@@ -69,15 +69,18 @@ class PointCloudProcessor:
         return pcd.voxel_down_sample(voxel_size)
 
     def rotate_point_cloud_by_pitch(self, pcd):
+        # self.pitch = 2.7
         # + pitch에서 point들이 밑으로 이동함
         if self.pitch is None:
             return pcd
-        self.pitch -= 0.5 # calibration
+        # self.pitch +=10# calibration
         
+        # pitch_rad = np.radians(+self.pitch)
         pitch_rad = np.radians(-self.pitch)
-        R = np.array([[np.cos(pitch_rad), 0, -np.sin(pitch_rad)],
+        # pitch_rad = np.radians(0)
+        R = np.array([[np.cos(pitch_rad), 0, np.sin(pitch_rad)],
                       [0, 1, 0],
-                      [np.sin(pitch_rad), 0, np.cos(pitch_rad)]], dtype=np.float32)
+                      [-np.sin(pitch_rad), 0, np.cos(pitch_rad)]], dtype=np.float32)
 
         # 3x3 회전 행렬을 4x4 변환 행렬로 확장
         T = np.eye(4, dtype=np.float32)
@@ -123,9 +126,11 @@ class PointCloudProcessor:
             points = np.column_stack((pc_array['x'], pc_array['y'], pc_array['z']))
             pcd = o3d.t.geometry.PointCloud(o3c.Tensor(points, dtype=o3c.float32, device=o3c.Device("CUDA:0")))
 
-            pcd = self.crop_roi(pcd, start=[-50, -50, self.vff_force], end=[50, 50, 0.1])
             pcd = self.voxel_down_sampling(pcd, voxel_size=self.voxel_size)
             pcd = self.rotate_point_cloud_by_pitch(pcd)
+            pcd = self.crop_roi(pcd, start=[-50, -50, self.vff_force], end=[50, 50, 0.1])
+            # pcd = self.crop_roi(pcd, start=[-50, -50, -0.2], end=[50, 50, 2])
+            
 
             ship_body_bounds = {'min': [-1.2, -0.7, -1], 'max': [0.9, 0.7, 0.5]}
             # ship_body_bounds = {'min': [-3, -3, -3], 'max': [3, 3, 3]}

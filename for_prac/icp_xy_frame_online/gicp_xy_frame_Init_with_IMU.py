@@ -38,7 +38,7 @@ class IMUCorrector:
         self.dyaw_step = 0
         self.vx = 0  
         self.vy = 0  
-        self.prev_heading = 8.955  
+        self.prev_heading = 0
         self.prev_time = None
 
     def imu_callback(self, data):
